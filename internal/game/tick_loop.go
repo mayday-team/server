@@ -12,6 +12,7 @@ import (
 	"github.com/mayday-team/server/internal/game/state"
 	"github.com/mayday-team/server/internal/game/systems"
 	"github.com/mayday-team/server/internal/protocol"
+	"github.com/mayday-team/server/internal/storage"
 )
 
 func (s *Session) run() {
