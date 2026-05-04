@@ -2,9 +2,6 @@
 
 Authoritative Go game server for **Mayday**, a single-player web 3D FPS. The client only collects input and renders; the server owns all simulation state, hit validation, AI, scenario progression, and the session event log.
 
----
-
-## System architecture
 
 ```mermaid
 flowchart LR
@@ -30,9 +27,6 @@ flowchart LR
     Tick --> Snap --> Client
     Sess -- async event buffer --> DB
 ```
-
-**Server owns:** position, rotation, velocity, HP, ammo, troop state, AI decisions, hit validation, scenario phase, defeat condition, event log.
-**Client owns:** rendering, camera, animation, sound, UI, local input collection.
 
 ### Concurrency model
 
