@@ -5,12 +5,12 @@ import "github.com/mayday-team/server/internal/game/state"
 // SessionStats summarizes the things we record per session for both the
 // final session_ended event and the persisted game_sessions row.
 type SessionStats struct {
-	ShotsFired         int
-	ShotsHit           int
-	DamageTaken        int
-	TroopsNeutralized  int
-	EventsRecorded     int
-	SurvivedMs         int64
+	ShotsFired        int
+	ShotsHit          int
+	DamageTaken       int
+	TroopsNeutralized int
+	EventsRecorded    int
+	SurvivedMs        int64
 }
 
 // AccumulateSurvival increments the player's survived time on each tick

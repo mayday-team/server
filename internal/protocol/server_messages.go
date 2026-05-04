@@ -74,14 +74,14 @@ type EventSnapshot struct {
 }
 
 type StateSnapshotPayload struct {
-	ServerTick        int64                  `json:"server_tick"`
-	SessionID         string                 `json:"session_id"`
-	ScenarioPhase     scenario.Phase         `json:"scenario_phase"`
-	PressureLevel     float64                `json:"pressure_level"`
-	EncirclementLevel float64                `json:"encirclement_level"`
-	Player            PlayerSnapshot         `json:"player"`
-	Troops            []TroopSnapshot        `json:"troops"`
-	Events            []EventSnapshot        `json:"events"`
+	ServerTick        int64           `json:"server_tick"`
+	SessionID         string          `json:"session_id"`
+	ScenarioPhase     scenario.Phase  `json:"scenario_phase"`
+	PressureLevel     float64         `json:"pressure_level"`
+	EncirclementLevel float64         `json:"encirclement_level"`
+	Player            PlayerSnapshot  `json:"player"`
+	Troops            []TroopSnapshot `json:"troops"`
+	Events            []EventSnapshot `json:"events"`
 }
 
 type TroopSpawnedPayload struct {

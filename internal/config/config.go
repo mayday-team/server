@@ -21,10 +21,10 @@ type Config struct {
 	TroopDamage         int
 	TroopMoveSpeed      float64
 
-	PlayerMaxHP        int
-	PlayerMaxAmmo      int
-	PlayerMoveSpeed    float64
-	PlayerShootDamage  int
+	PlayerMaxHP       int
+	PlayerMaxAmmo     int
+	PlayerMoveSpeed   float64
+	PlayerShootDamage int
 
 	ShootMaxDistance    float64
 	ShootAngleThreshold float64

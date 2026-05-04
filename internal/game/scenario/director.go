@@ -58,15 +58,15 @@ func NewDirector(now time.Time, cfg Config) *Director {
 	}
 }
 
-func (d *Director) CurrentPhase() Phase            { return d.currentPhase }
-func (d *Director) PressureLevel() float64         { return d.pressureLevel }
-func (d *Director) EncirclementLevel() float64     { return d.encirclementLevel }
-func (d *Director) ReinforcementLevel() int        { return d.reinforcementLevel }
-func (d *Director) EscapeBlocked() bool            { return d.escapeBlocked }
-func (d *Director) ForcedDefeatTriggered() bool    { return d.forcedDefeatTriggered }
-func (d *Director) DefeatReason() DefeatReason     { return d.defeatReason }
-func (d *Director) SessionStartedAt() time.Time    { return d.sessionStartedAt }
-func (d *Director) PhaseStartedAt() time.Time      { return d.phaseStartedAt }
+func (d *Director) CurrentPhase() Phase         { return d.currentPhase }
+func (d *Director) PressureLevel() float64      { return d.pressureLevel }
+func (d *Director) EncirclementLevel() float64  { return d.encirclementLevel }
+func (d *Director) ReinforcementLevel() int     { return d.reinforcementLevel }
+func (d *Director) EscapeBlocked() bool         { return d.escapeBlocked }
+func (d *Director) ForcedDefeatTriggered() bool { return d.forcedDefeatTriggered }
+func (d *Director) DefeatReason() DefeatReason  { return d.defeatReason }
+func (d *Director) SessionStartedAt() time.Time { return d.sessionStartedAt }
+func (d *Director) PhaseStartedAt() time.Time   { return d.phaseStartedAt }
 
 // Tick advances the director state for a single simulation tick.
 func (d *Director) Tick(in Input) Update {

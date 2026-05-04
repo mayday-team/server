@@ -61,6 +61,7 @@ type Session struct {
 
 	pendingEventSnapshots []protocol.EventSnapshot
 	eventBuf              chan storage.EventRecord
+	persisterDone         chan struct{}
 
 	stats systems.SessionStats
 
@@ -112,25 +113,26 @@ func NewSession(p SessionParams) *Session {
 	}
 
 	return &Session{
-		id:      p.ID,
-		log:     p.Logger.With("session_id", p.ID),
-		cfg:     cfg,
-		inputCh: make(chan protocol.ClientMessage, cfg.SessionEventBufferSize),
-		sender:  p.Sender,
+		id:          p.ID,
+		log:         p.Logger.With("session_id", p.ID),
+		cfg:         cfg,
+		inputCh:     make(chan protocol.ClientMessage, cfg.SessionEventBufferSize),
+		sender:      p.Sender,
 		eventRepo:   p.EventRepo,
 		sessionRepo: p.SessionRepo,
-		aiCtrl:   ai.NewController(),
+		aiCtrl:      ai.NewController(),
 		director: scenario.NewDirector(p.Now, scenario.Config{
 			FinalStandAfter:  cfg.FinalStandAfter,
 			ForceDefeatAfter: cfg.ForceDefeatAfter,
 			MaxTroops:        cfg.MaxTroopCount,
 		}),
-		player:    player,
-		troops:    make(map[string]*state.MartialTroopState),
-		rng:       rng,
-		eventBuf:  make(chan storage.EventRecord, cfg.SessionEventBufferSize),
-		doneCh:    make(chan struct{}),
-		startedAt: p.Now,
+		player:        player,
+		troops:        make(map[string]*state.MartialTroopState),
+		rng:           rng,
+		eventBuf:      make(chan storage.EventRecord, cfg.SessionEventBufferSize),
+		persisterDone: make(chan struct{}),
+		doneCh:        make(chan struct{}),
+		startedAt:     p.Now,
 	}
 }
 
@@ -196,6 +198,7 @@ func (s *Session) persistSessionStart() {
 }
 
 func (s *Session) runEventPersister() {
+	defer close(s.persisterDone)
 	for ev := range s.eventBuf {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		if err := s.eventRepo.Insert(ctx, ev); err != nil {

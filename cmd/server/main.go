@@ -32,7 +32,7 @@ func main() {
 	metrics := observability.New()
 
 	var (
-		eventRepo   storage.EventRepository = storage.NoopEventRepository{}
+		eventRepo   storage.EventRepository   = storage.NoopEventRepository{}
 		sessionRepo storage.SessionRepository = storage.NoopSessionRepository{}
 	)
 	if cfg.DatabaseURL != "" {

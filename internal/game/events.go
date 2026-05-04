@@ -12,16 +12,16 @@ import (
 type EventType string
 
 const (
-	EventSessionStarted   EventType = "SESSION_STARTED"
-	EventPhaseChanged     EventType = "PHASE_CHANGED"
-	EventPressureChanged  EventType = "PRESSURE_CHANGED"
-	EventTroopSpawned     EventType = "TROOP_SPAWNED"
-	EventPlayerShot       EventType = "PLAYER_SHOT"
-	EventPlayerHitTroop   EventType = "PLAYER_HIT_TROOP"
-	EventPlayerDamaged    EventType = "PLAYER_DAMAGED"
-	EventPlayerDied       EventType = "PLAYER_DIED"
-	EventDefeatTriggered  EventType = "DEFEAT_TRIGGERED"
-	EventSessionEnded     EventType = "SESSION_ENDED"
+	EventSessionStarted  EventType = "SESSION_STARTED"
+	EventPhaseChanged    EventType = "PHASE_CHANGED"
+	EventPressureChanged EventType = "PRESSURE_CHANGED"
+	EventTroopSpawned    EventType = "TROOP_SPAWNED"
+	EventPlayerShot      EventType = "PLAYER_SHOT"
+	EventPlayerHitTroop  EventType = "PLAYER_HIT_TROOP"
+	EventPlayerDamaged   EventType = "PLAYER_DAMAGED"
+	EventPlayerDied      EventType = "PLAYER_DIED"
+	EventDefeatTriggered EventType = "DEFEAT_TRIGGERED"
+	EventSessionEnded    EventType = "SESSION_ENDED"
 )
 
 // Event is one row in the game_events log.

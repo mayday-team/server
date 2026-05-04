@@ -74,9 +74,9 @@ func (NoopSessionRepository) End(_ context.Context, _ SessionEndRecord) error   
 
 // MemorySessionRepository is a simple in-memory store used by tests.
 type MemorySessionRepository struct {
-	mu      sync.Mutex
-	starts  []SessionStartRecord
-	ends    []SessionEndRecord
+	mu     sync.Mutex
+	starts []SessionStartRecord
+	ends   []SessionEndRecord
 }
 
 func NewMemorySessionRepository() *MemorySessionRepository {

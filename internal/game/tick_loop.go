@@ -168,9 +168,9 @@ func (s *Session) handleShoot(p protocol.ShootPayload, now time.Time) {
 
 	if out.Accepted {
 		s.recordEvent(EventPlayerShot, map[string]any{
-			"seq":         p.Seq,
-			"hit":         out.HitTroopID != "",
-			"hit_troop":   out.HitTroopID,
+			"seq":          p.Seq,
+			"hit":          out.HitTroopID != "",
+			"hit_troop":    out.HitTroopID,
 			"hit_distance": out.HitDistance,
 		})
 		if out.HitTroopID != "" {
@@ -492,8 +492,6 @@ func (s *Session) recordEvent(t EventType, payload any) {
 }
 
 func (s *Session) finalize() {
-	close(s.eventBuf)
-
 	endedAt := time.Now()
 	finalPhase := s.director.CurrentPhase()
 	defeat := s.director.DefeatReason()
@@ -543,6 +541,11 @@ func (s *Session) finalize() {
 	}); err != nil {
 		s.log.Warn("session end persist failed", "err", err)
 	}
+
+	// Close the event buffer last so all recordEvent calls above land in
+	// the persister; then wait for the persister to drain remaining items.
+	close(s.eventBuf)
+	<-s.persisterDone
 }
 
 func playerToSnapshot(p *state.CivilianPlayerState) protocol.PlayerSnapshot {

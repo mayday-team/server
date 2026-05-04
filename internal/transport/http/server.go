@@ -13,9 +13,9 @@ import (
 
 // Server wires the HTTP listener for both /health and /ws.
 type Server struct {
-	srv     *http.Server
-	log     *slog.Logger
-	addr    string
+	srv  *http.Server
+	log  *slog.Logger
+	addr string
 }
 
 // New constructs the HTTP server. The websocket handler is given the shared

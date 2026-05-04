@@ -24,10 +24,10 @@ type Action struct {
 	HasPoint bool
 }
 
-func MoveTo(p gmath.Vector3) Action      { return Action{Kind: ActionMoveTo, Target: p, HasPoint: true} }
-func LookAt(p gmath.Vector3) Action      { return Action{Kind: ActionLookAt, Target: p, HasPoint: true} }
-func Shoot(at gmath.Vector3) Action      { return Action{Kind: ActionShoot, Target: at, HasPoint: true} }
-func FlankTo(p gmath.Vector3) Action     { return Action{Kind: ActionFlankTo, Target: p, HasPoint: true} }
+func MoveTo(p gmath.Vector3) Action  { return Action{Kind: ActionMoveTo, Target: p, HasPoint: true} }
+func LookAt(p gmath.Vector3) Action  { return Action{Kind: ActionLookAt, Target: p, HasPoint: true} }
+func Shoot(at gmath.Vector3) Action  { return Action{Kind: ActionShoot, Target: at, HasPoint: true} }
+func FlankTo(p gmath.Vector3) Action { return Action{Kind: ActionFlankTo, Target: p, HasPoint: true} }
 func SuppressArea(p gmath.Vector3) Action {
 	return Action{Kind: ActionSuppressArea, Target: p, HasPoint: true}
 }
