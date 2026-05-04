@@ -1,8 +1,8 @@
 package systems
 
 import (
-	gmath "github.com/example/mayday-server/internal/game/math"
-	"github.com/example/mayday-server/internal/game/state"
+	gmath "github.com/mayday-team/server/internal/game/math"
+	"github.com/mayday-team/server/internal/game/state"
 )
 
 // MovementInput represents the boolean directional input for one tick.

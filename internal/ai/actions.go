@@ -1,6 +1,6 @@
 package ai
 
-import gmath "github.com/example/mayday-server/internal/game/math"
+import gmath "github.com/mayday-team/server/internal/game/math"
 
 type ActionKind string
 

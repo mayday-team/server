@@ -1,6 +1,6 @@
 package ai
 
-import gmath "github.com/example/mayday-server/internal/game/math"
+import gmath "github.com/mayday-team/server/internal/game/math"
 
 // PerceptionInput is the minimal subset of the world the AI needs to make a
 // decision for one troop. It deliberately does not reference game-package

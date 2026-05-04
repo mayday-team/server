@@ -1,8 +1,8 @@
 package ai
 
 import (
-	gmath "github.com/example/mayday-server/internal/game/math"
-	"github.com/example/mayday-server/internal/game/scenario"
+	gmath "github.com/mayday-team/server/internal/game/math"
+	"github.com/mayday-team/server/internal/game/scenario"
 )
 
 // TroopSnapshot is the per-troop view passed to Decide. It avoids importing

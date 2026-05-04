@@ -1,6 +1,6 @@
 package ai
 
-import gmath "github.com/example/mayday-server/internal/game/math"
+import gmath "github.com/mayday-team/server/internal/game/math"
 
 // Controller is a thin façade that bundles perception + decision for one
 // troop. The game session calls Update once per troop per tick and applies

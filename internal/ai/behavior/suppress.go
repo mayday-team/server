@@ -1,8 +1,8 @@
 package behavior
 
 import (
-	"github.com/example/mayday-server/internal/ai"
-	gmath "github.com/example/mayday-server/internal/game/math"
+	"github.com/mayday-team/server/internal/ai"
+	gmath "github.com/mayday-team/server/internal/game/math"
 )
 
 func Suppress(target gmath.Vector3) []ai.Action {
