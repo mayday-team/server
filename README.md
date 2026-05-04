@@ -1,354 +1,373 @@
-# Mayday — server
+# mayday-server
 
-`mayday-server` is the authoritative game server for **Mayday**, a single-player web 3D FPS that interprets the May 18 Gwangju Democratization Movement from the perspective of a civilian militia. The opposing forces are martial law troops controlled entirely by server-side AI.
-
-The player **cannot win**. This is a deliberate design constraint, not a bug. Mayday is intended as a historical experience and a backend architecture exercise — not a power fantasy. Server systems express asymmetry, encirclement, resource exhaustion, and inevitable defeat. The work of the server is to model that pressure honestly and respectfully, and to record each session in a form that can be replayed and analyzed.
-
-This repository contains only the server. The Unity WebGL client is developed separately.
+Authoritative Go game server for **Mayday**, a single-player web 3D FPS. The client only collects input and renders; the server owns all simulation state, hit validation, AI, scenario progression, and the session event log.
 
 ---
 
-## Why this exists
-
-Mayday is built as a backend portfolio project. The interesting engineering claims it makes:
-
-- A Go-based **authoritative game server** with no client trust.
-- A **session-specific goroutine tick loop** with channel-based input and event queues.
-- All state mutation is **serialized inside the session loop**, with WebSocket transport cleanly separated from simulation.
-- **Server-side hit validation** (no client-reported hits).
-- **FSM-based AI** for martial law troops (`PATROL → CHASE → ATTACK → SUPPRESS → FLANK → BLOCK_EXIT → CALL_REINFORCEMENT → TAKE_COVER → DEAD`).
-- A **ScenarioDirector** that owns phase progression and **guarantees eventual defeat**.
-- A **PostgreSQL event log** (`game_events`) suitable for replay tooling and analytics.
-- **Dockerized** local development.
-- Clean package boundaries and **testable domain logic**.
-
----
-
-## Architecture
+## System architecture
 
 ```mermaid
 flowchart LR
-    Client[Unity WebGL / Browser Client]
-    GW[/WS Gateway/]
+    Client[Browser Client]
+    GW[/WebSocket Gateway/]
     Mgr[SessionManager]
-    Sess[GameSession]
-    Tick[Tick Loop]
-    Inp[Input/Event Channels]
+    Sess[Session goroutine]
+    Tick[Tick Loop 30Hz]
     Sys[Game Systems]
-    AI[Martial Troop AI]
+    AI[Troop AI - FSM]
     Dir[ScenarioDirector]
-    State[Server-Owned State]
-    Snap[Snapshot Broadcast]
-    DB[(PostgreSQL\ngame_sessions / game_events)]
+    State[Authoritative State]
+    Snap[Snapshot 15Hz]
+    DB[(PostgreSQL)]
 
-    Client <--> GW
-    GW --> Mgr
-    Mgr --> Sess
+    Client <-- JSON over WS --> GW
+    GW --> Mgr --> Sess
     Sess --> Tick
-    Tick --> Inp
     Tick --> Sys
     Tick --> AI
     Tick --> Dir
     Tick --> State
-    Tick --> Snap
-    Snap --> Client
-    Sess --> DB
+    Tick --> Snap --> Client
+    Sess -- async event buffer --> DB
 ```
 
-The server is the only source of truth.
+**Server owns:** position, rotation, velocity, HP, ammo, troop state, AI decisions, hit validation, scenario phase, defeat condition, event log.
+**Client owns:** rendering, camera, animation, sound, UI, local input collection.
 
-| Server owns                                                                                              | Client owns                                  |
-|----------------------------------------------------------------------------------------------------------|----------------------------------------------|
-| player position, rotation, velocity, HP, ammo, troop state, AI decisions, hit validation, scenario phase | rendering, camera, animation, sound, UI      |
-| damage, death, defeat, event log, final session result                                                   | local input collection, prediction (future)  |
+### Concurrency model
 
-### Why Go
+- One **Session goroutine** per connection. It is the only goroutine that mutates simulation state.
+- One **WebSocket reader** + **WebSocket writer** per connection, both buffered.
+- One **event persister** goroutine per session, drains a buffered channel into PostgreSQL so a slow DB never stalls the tick loop.
+- Mutexes appear only around the session map and the per-connection send buffer.
 
-- A simulation server that needs many isolated tick loops maps cleanly to goroutines and channels.
-- `context.Context` propagates cancellation down to the per-session loop, so disconnects and shutdowns terminate cleanly.
-- The standard library covers HTTP, JSON, and structured logging (`log/slog`); the only third-party dependencies are `gorilla/websocket`, `pgx`, `google/uuid`, and `testify`.
-- Static binaries make the Docker image small and predictable.
-
-### Package boundaries
+### Package layout
 
 ```
-cmd/server/                 # main entry point
-internal/config/            # env-backed typed config + validation
-internal/logger/            # slog setup
-internal/observability/     # uptime / counters
-internal/protocol/          # wire types, envelope, parser, encoder
-internal/storage/           # pgx pool + EventRepository / SessionRepository (+ no-op + memory fallbacks)
-internal/transport/http/    # /health and HTTP server bootstrap
-internal/transport/websocket/   # gorilla/websocket gateway + per-connection reader/writer
-internal/game/              # Session, SessionManager, tick loop, events, constants
-internal/game/state/        # CivilianPlayerState, MartialTroopState (separated to break import cycles)
-internal/game/math/         # Vector3, raycast helpers
-internal/game/scenario/     # Phase, DefeatReason, PressureInput, Director
-internal/game/systems/      # movement, shooting, damage, defeat, objective, respawn helpers
-internal/ai/                # FSM states, Action, perception, decision (pure)
-internal/ai/behavior/       # per-state behavior helpers
-migrations/                 # SQL migrations driven by goose
-tests/                      # cross-package tests
+cmd/server/                  main()
+internal/config/             env-backed typed config
+internal/logger/             slog setup
+internal/observability/      counters, uptime
+internal/protocol/           envelope + typed client/server messages
+internal/transport/http/     /health, HTTP bootstrap
+internal/transport/websocket/  gorilla/websocket reader & writer
+internal/storage/            pgx pool + Event/Session repos (+ noop / memory)
+internal/game/               Session, SessionManager, tick loop, events
+internal/game/state/         CivilianPlayerState, MartialTroopState
+internal/game/math/          Vector3, raycast
+internal/game/scenario/      Phase, DefeatReason, ScenarioDirector
+internal/game/systems/       movement, shooting, damage, defeat, objective
+internal/ai/                 FSM states, perception, pure Decide()
+internal/ai/behavior/        per-state behavior helpers
+migrations/                  goose-driven SQL
+tests/                       cross-package tests
 ```
 
-The session goroutine never holds a mutex while waiting on the network, and the WebSocket goroutine never mutates simulation state. All cross-goroutine communication runs through buffered channels.
+### Scenario phases
+
+`INITIAL_CONTACT → ESCALATION → REINFORCEMENT → ENCIRCLEMENT → FINAL_STAND → DEFEAT`. There is no `VICTORY`. Defeat reasons: `PLAYER_KILLED`, `OVERRUN`, `AMMO_EXHAUSTED`, `ENCIRCLED`, `SCRIPTED_FINAL_STAND`, `DISCONNECTED`.
+
+### Troop AI states
+
+`PATROL`, `ADVANCE`, `CHASE`, `ATTACK`, `SUPPRESS`, `FLANK`, `BLOCK_EXIT`, `CALL_REINFORCEMENT`, `TAKE_COVER`, `DEAD`. Pure `ai.Decide(input) → (state, []Action)`.
 
 ---
 
-## Session lifecycle
+## API spec
 
-1. Client opens `WS /ws`.
-2. Client sends `start_session`. The server allocates a `Session`, persists a row in `game_sessions`, and starts the tick loop.
-3. Each tick (default 30Hz):
-   1. Drain queued client inputs (movement, look, shoot, ping…).
-   2. Advance the **ScenarioDirector** (phase, pressure, encirclement).
-   3. Spawn troops on phase changes if needed.
-   4. Run AI **perception → decision → actions** for each troop.
-   5. Apply troop shots through the same damage system the player uses.
-   6. Accumulate survival time.
-   7. Every snapshot interval (default 15Hz), broadcast a `state_snapshot`.
-4. Defeat is triggered by death, scripted timing, encirclement, or ammo exhaustion. The session emits `defeat_triggered`, then `session_ended`, persists the final summary, and exits.
-5. Disconnects translate into `DefeatReason: DISCONNECTED`.
+### HTTP
 
-A single `time.Ticker` drives the loop; a `context.Context` from the parent (HTTP or transport) terminates it.
+#### `GET /health`
 
----
+```json
+{
+  "status": "ok",
+  "service": "mayday-server",
+  "uptime": 123,
+  "timestamp": "2026-05-04T12:34:56Z"
+}
+```
 
-## WebSocket protocol
+### WebSocket
 
-All frames share an envelope:
+#### `GET /ws`
+
+Subprotocol: none. All frames are UTF-8 JSON. Every frame is wrapped in:
 
 ```json
 { "type": "<message_type>", "payload": { ... } }
 ```
 
-### Client → Server (excerpt)
+The first message from the client **must** be `start_session`. Anything else returns an `error` frame with code `session_not_started`.
+
+---
+
+### Client → Server messages
+
+#### `start_session`
 
 ```json
 { "type": "start_session", "payload": { "player_name": "anonymous" } }
-{ "type": "player_input",  "payload": { "seq": 12, "move": { "forward": true, "right": true }, "delta_ms": 16 } }
-{ "type": "player_look",   "payload": { "yaw": 1.5, "pitch": -0.2 } }
-{ "type": "shoot",         "payload": { "seq": 18, "origin": { "x":0,"y":1.6,"z":0 }, "direction": { "x":0,"y":0,"z":1 }, "client_time": 123456 } }
-{ "type": "reload",        "payload": {} }
-{ "type": "interact",      "payload": { "target_id": "..." } }
-{ "type": "ping",          "payload": { "client_time": 123456 } }
 ```
 
-### Server → Client (types)
+#### `player_input`
 
-`welcome`, `session_started`, `state_snapshot`, `troop_spawned`, `shot_result`, `damage_taken`, `player_died`, `scenario_phase_changed`, `pressure_changed`, `defeat_triggered`, `session_ended`, `event_logged`, `pong`, `error`.
-
-The `state_snapshot` payload is intentionally compact (player + troop summaries + recent event metadata) so it can be broadcast at the snapshot rate without dragging the full event log along with it.
-
----
-
-## Martial Law Troop AI
-
-The AI is implemented as a finite state machine over per-tick perception. Decision logic is a pure function (`ai.Decide`) so it can be tested in isolation.
-
-```
-       ┌────────┐  player visible
-PATROL │PATROL  │ ───────────────► CHASE ─► ATTACK ─► SUPPRESS
-       └────────┘                    │         │         │
-                                     │         ▼         ▼
-                                     └─► FLANK / BLOCK_EXIT (ENCIRCLEMENT / FINAL_STAND)
-                                          │
-                                          ▼
-                                    CALL_REINFORCEMENT
-                                          │
-TAKE_COVER ◄── HP low / pressure low ─────┘
-DEAD       ◄── HP ≤ 0
+```json
+{
+  "type": "player_input",
+  "payload": {
+    "seq": 12,
+    "move": { "forward": true, "backward": false, "left": false, "right": true },
+    "delta_ms": 16
+  }
+}
 ```
 
-Perception is intentionally simple for the MVP: a troop sees the player when the distance is below `TROOP_DETECTION_RANGE`; it can attack inside `TROOP_ATTACK_RANGE`. Future work can add line-of-sight raycasting against a map.
+`delta_ms` is clamped server-side (max 100 ms) to prevent teleport.
 
-AI emits `Action`s (`MOVE_TO`, `LOOK_AT`, `SHOOT`, `FLANK_TO`, `BLOCK_EXIT`, `CALL_REINFORCEMENT`, `TAKE_COVER`, …). The game systems are responsible for translating those actions into authoritative state mutations — AI never touches the world directly.
+#### `player_look`
 
----
+```json
+{ "type": "player_look", "payload": { "yaw": 1.5, "pitch": -0.2 } }
+```
 
-## ScenarioDirector — inevitable defeat
+#### `shoot`
 
-`scenario.Director` owns:
+```json
+{
+  "type": "shoot",
+  "payload": {
+    "seq": 18,
+    "origin":    { "x": 0, "y": 1.6, "z": 0 },
+    "direction": { "x": 0, "y": 0,   "z": 1 },
+    "client_time": 123456789
+  }
+}
+```
 
-- `CurrentPhase`: `INITIAL_CONTACT → ESCALATION → REINFORCEMENT → ENCIRCLEMENT → FINAL_STAND → DEFEAT`
-- `PressureLevel` ∈ [0, 1] derived from elapsed time, player HP, ammo, and surviving troop count
-- `EncirclementLevel` ∈ [0, 1] (quadratic ease-in over time)
-- `ReinforcementLevel`, `EscapeBlocked`
-- `ForcedDefeatTriggered`, `DefeatReason`
+The server runs its own raycast. The reported hit (if any) is computed server-side; client-supplied hit results are ignored.
 
-The director runs every tick and:
+#### `reload`
 
-1. Recomputes pressure and encirclement.
-2. Advances the phase based on time and pressure.
-3. Checks defeat triggers:
-   - `PLAYER_KILLED` if `IsAlive == false`
-   - `SCRIPTED_FINAL_STAND` after `FORCE_DEFEAT_AFTER_MS`
-   - `AMMO_EXHAUSTED` in `FINAL_STAND` if ammo is zero with troops alive
-   - `ENCIRCLED` in `FINAL_STAND` once encirclement nears 1.0
-4. Returns an `Update` describing what changed so the session can emit the right events.
+```json
+{ "type": "reload", "payload": {} }
+```
 
-There is no `VICTORY` phase. There is no win condition. Sessions end. Outcomes vary in how long the player survived, how many troops they neutralized, what ammo and HP they had left, and which `DefeatReason` was reached.
+#### `interact`
 
----
+```json
+{ "type": "interact", "payload": { "target_id": "object-id" } }
+```
 
-## Shooting validation
+#### `ping`
 
-Every `shoot` message is treated as a **request** the server may reject:
-
-- player must exist, be alive, and have ammo
-- fire rate is enforced (`FIRE_RATE_LIMIT_MS`)
-- direction must be non-zero
-- the server runs its own raycast against troop positions and only counts hits within `SHOOT_MAX_DISTANCE` and a dot-product cone defined by `SHOOT_ANGLE_THRESHOLD`
-- the nearest valid troop along the ray is chosen — never the client's claimed target
-- damage is applied server-side; only then is `shot_result` returned
-
-Troop AI shots run through the same damage system as player shots, just with their own damage / fire-rate parameters.
+```json
+{ "type": "ping", "payload": { "client_time": 123456789 } }
+```
 
 ---
 
-## PostgreSQL event log
+### Server → Client messages
 
-Two tables (see `migrations/`):
+#### `welcome`
 
-| Table         | Purpose                                                  |
-|---------------|----------------------------------------------------------|
-| `game_sessions` | Session-level summary: started_at, ended_at, defeat_reason, shots_fired/hit, damage_taken, troops_neutralized, survived_ms |
-| `game_events`   | Append-only per-tick events: `SESSION_STARTED`, `PHASE_CHANGED`, `PRESSURE_CHANGED`, `TROOP_SPAWNED`, `PLAYER_SHOT`, `PLAYER_HIT_TROOP`, `PLAYER_DAMAGED`, `PLAYER_DIED`, `DEFEAT_TRIGGERED`, `SESSION_ENDED` |
+```json
+{ "type": "welcome", "payload": { "server_version": "mayday-mvp", "server_time": 1714824000000 } }
+```
 
-Each event has a JSONB payload, a `server_tick`, and a foreign key to the session. Indexes on `(session_id, server_tick)` and `type` make replay-style and analytics queries cheap.
+#### `session_started`
 
-The session pushes events into a buffered channel; a separate persister goroutine drains the channel, so a slow database can never stall the tick loop. If the channel is full, the event is dropped from persistence (with a warning) but still observed by clients via `event_logged`.
+```json
+{ "type": "session_started", "payload": { "session_id": "uuid", "tick_rate": 30, "started_at": 1714824000000 } }
+```
 
-If the database is unreachable at startup, `mayday-server` boots with no-op repositories rather than crashing — the live game still runs, just without persistence.
+#### `state_snapshot` (every snapshot tick, default 15Hz)
+
+```json
+{
+  "type": "state_snapshot",
+  "payload": {
+    "server_tick": 1024,
+    "session_id": "uuid",
+    "scenario_phase": "INITIAL_CONTACT",
+    "pressure_level": 0.35,
+    "encirclement_level": 0.20,
+    "player": {
+      "id": "uuid", "name": "jin",
+      "position": { "x": 0, "y": 1.6, "z": 0 },
+      "yaw": 0, "pitch": 0,
+      "hp": 100, "max_hp": 100,
+      "ammo": 24, "max_ammo": 24,
+      "is_alive": true,
+      "last_processed_input_seq": 12,
+      "survival_time_ms": 5400,
+      "morale": 1.0
+    },
+    "troops": [
+      {
+        "id": "uuid",
+        "position": { "x": 12, "y": 0, "z": 8 },
+        "yaw": 1.2,
+        "hp": 60, "max_hp": 60,
+        "state": "CHASE",
+        "is_alive": true,
+        "squad_id": "alpha"
+      }
+    ],
+    "events": [
+      { "type": "TROOP_SPAWNED", "server_tick": 1020 }
+    ]
+  }
+}
+```
+
+#### `troop_spawned`
+
+```json
+{ "type": "troop_spawned", "payload": { "troop": { /* TroopSnapshot */ }, "server_tick": 1024 } }
+```
+
+#### `shot_result`
+
+```json
+{
+  "type": "shot_result",
+  "payload": {
+    "seq": 18,
+    "accepted": true,
+    "reason": "hit",
+    "hit_troop_id": "uuid",
+    "hit_distance": 8.4,
+    "damage_dealt": 25,
+    "troop_killed": false,
+    "ammo_left": 23
+  }
+}
+```
+
+`reason` is one of: `hit`, `miss`, `dead`, `no_ammo`, `fire_rate`, `bad_direction`, `no_player`.
+
+#### `damage_taken`
+
+```json
+{ "type": "damage_taken", "payload": { "source": "martial_troop", "source_id": "uuid", "damage": 8, "remaining_hp": 92 } }
+```
+
+#### `player_died`
+
+```json
+{ "type": "player_died", "payload": { "session_id": "uuid", "tick": 1500 } }
+```
+
+#### `scenario_phase_changed`
+
+```json
+{ "type": "scenario_phase_changed", "payload": { "previous_phase": "ESCALATION", "current_phase": "REINFORCEMENT", "tick": 1800 } }
+```
+
+#### `pressure_changed`
+
+```json
+{ "type": "pressure_changed", "payload": { "pressure_level": 0.62, "encirclement_level": 0.45 } }
+```
+
+Emitted only when pressure moves by ≥ 0.05.
+
+#### `defeat_triggered`
+
+```json
+{ "type": "defeat_triggered", "payload": { "reason": "SCRIPTED_FINAL_STAND", "tick": 12600 } }
+```
+
+#### `session_ended`
+
+```json
+{
+  "type": "session_ended",
+  "payload": {
+    "session_id": "uuid",
+    "survived_ms": 420000,
+    "final_phase": "DEFEAT",
+    "defeat_reason": "SCRIPTED_FINAL_STAND",
+    "shots_fired": 18,
+    "shots_hit": 11,
+    "damage_taken": 64,
+    "troops_neutralized": 7,
+    "events_recorded": 152
+  }
+}
+```
+
+#### `event_logged`
+
+```json
+{ "type": "event_logged", "payload": { "type": "PLAYER_HIT_TROOP", "server_tick": 950 } }
+```
+
+Lightweight notification only. Full payloads live in `game_events` (PostgreSQL).
+
+#### `pong`
+
+```json
+{ "type": "pong", "payload": { "client_time": 123456789, "server_time": 1714824000000 } }
+```
+
+#### `error`
+
+```json
+{ "type": "error", "payload": { "code": "parse_error", "message": "..." } }
+```
+
+Error codes: `parse_error`, `session_not_started`, plus the parse error variants `invalid_json`, `unknown_message_type`, `malformed_payload`, `empty_message`.
 
 ---
 
-## Local setup
+## Persisted schema
 
-Requirements: Go ≥ 1.22, optionally `goose` for migrations and a local Postgres.
+```sql
+game_sessions(
+  id UUID PK, player_name TEXT, started_at TIMESTAMPTZ, ended_at TIMESTAMPTZ,
+  survived_ms BIGINT, final_phase TEXT, defeat_reason TEXT,
+  shots_fired INT, shots_hit INT, damage_taken INT, troops_neutralized INT,
+  created_at TIMESTAMPTZ
+)
+
+game_events(
+  id UUID PK, session_id UUID FK,
+  type TEXT, server_tick BIGINT, payload JSONB, created_at TIMESTAMPTZ
+)
+```
+
+Indexes: `game_events(session_id, server_tick)`, `game_events(type)`, `game_sessions(started_at)`.
+
+Event types: `SESSION_STARTED`, `PHASE_CHANGED`, `PRESSURE_CHANGED`, `TROOP_SPAWNED`, `PLAYER_SHOT`, `PLAYER_HIT_TROOP`, `PLAYER_DAMAGED`, `PLAYER_DIED`, `DEFEAT_TRIGGERED`, `SESSION_ENDED`.
+
+---
+
+## Run
 
 ```bash
 cp .env.example .env
-make tidy
-make build
-./bin/mayday-server
-# or
-make run
+make run                  # local
+make test                 # go test -count=1 -race ./...
+docker compose up --build # postgres + server
+make migrate-up           # requires goose
 ```
 
-By default the server listens on `:3001`.
+If `DATABASE_URL` is unset or unreachable, the server boots with no-op repositories — the simulation still runs.
 
-```bash
-curl http://localhost:3001/health
-# {"status":"ok","service":"mayday-server","uptime":...,"timestamp":"..."}
-```
+Default port: `:3001`.
 
----
+## Config (env)
 
-## Docker setup
-
-```bash
-docker compose up --build
-```
-
-This brings up Postgres and `mayday-server` together. The server is exposed on `localhost:3001` and Postgres on `localhost:5432`.
-
----
-
-## Migrations
-
-```bash
-make migrate-up     # apply
-make migrate-down   # roll back the most recent
-```
-
-`make` looks for `goose` on `PATH`. Install with:
-
-```bash
-go install github.com/pressly/goose/v3/cmd/goose@latest
-```
-
-You can override the database URL: `make migrate-up DB_URL=postgres://...`.
-
----
-
-## Tests
-
-```bash
-make test
-```
-
-Covers:
-
-- `Vector3` / raycast hit / miss / off-angle / out-of-range
-- `protocol.Parse` valid + invalid + unknown types + malformed payload
-- AI: attack-in-range, chase-out-of-range, flank during encirclement, call reinforcement during reinforcement
-- Shooting: dead player, no-ammo, fire-rate, hit, miss, kill
-- ScenarioDirector: phase progression, eventual scripted defeat, player-killed defeat, disconnect handling
-- Session: tick loop starts and stops cleanly, emits welcome/session_started/session_ended
-
----
-
-## Manual WebSocket test
-
-A minimal session looks like:
-
-```bash
-# any websocket client (websocat, wscat) works
-websocat ws://localhost:3001/ws
-```
-
-Then send:
-
-```json
-{"type":"start_session","payload":{"player_name":"jin"}}
-{"type":"player_input","payload":{"seq":1,"move":{"forward":true},"delta_ms":16}}
-{"type":"shoot","payload":{"seq":2,"origin":{"x":0,"y":1.6,"z":0},"direction":{"x":0,"y":0,"z":1},"client_time":0}}
-{"type":"ping","payload":{"client_time":0}}
-```
-
-You should observe `welcome`, `session_started`, `troop_spawned`, periodic `state_snapshot`, eventual `pressure_changed`, `scenario_phase_changed`, and finally `defeat_triggered` followed by `session_ended`.
-
----
-
-## Current limitations
-
-- Single-player only by design. The `Session` type is single-tenant.
-- No map / collision: troops and the player share an open plane, so positions are unconstrained.
-- No client-side prediction or reconciliation yet — snapshots are authoritative and clients are expected to interpolate.
-- Reload is a placeholder that tops up to max ammo when empty (no timer or reload animation gating).
-- Suppression is mostly atmospheric in the MVP — it shapes troop posture but does not yet add per-area accuracy debuffs.
-- AI line-of-sight is distance-only; no occlusion.
-- No spatial partitioning; for the MVP troop counts (≤ 30) a linear scan is fine.
-
-These are explicit MVP cutoffs, not unknown unknowns.
-
----
-
-## Roadmap
-
-- Unity WebGL client integration
-- Client-side prediction + server reconciliation
-- Entity interpolation
-- Lag compensation for shots
-- Map collision and occluded line-of-sight raycasts
-- Spatial partitioning (uniform grid / BVH)
-- Replay viewer driven by `game_events`
-- Analytics dashboard over `game_events` (phase distributions, defeat reason histograms, average survival per phase)
-- More nuanced civilian objectives — rescue, supply caches, sheltering — that produce richer event logs
-- Accessibility settings (input remapping, contrast modes, reduced-motion)
-- A possible Python AI service split, only if reinforcement-learned bots are introduced later
-
----
-
-## Backend portfolio notes
-
-If you are reading this as a portfolio reviewer, the parts I most want to call out:
-
-- **Authoritative single-player server.** Single-player is the simplest topology, but the server is still the only source of truth — every shot, every position, every defeat is decided by the server. The codebase intentionally treats the client as untrusted.
-- **Concurrency model is conservative.** A session goroutine owns its state. Inputs come in over a buffered channel. Outbound messages go out over another buffered channel. Mutexes appear only where two goroutines genuinely cross — `SessionManager`'s session map and the `Client`'s send buffer guards. Everything else is single-goroutine code, which makes the simulation easy to reason about.
-- **Graceful degradation.** If Postgres is offline, the server boots with no-op repositories and keeps simulating; events still flow to the client. If the event persister falls behind, events are dropped from persistence rather than blocking the tick loop.
-- **Pure decision logic.** AI decisions and pressure computations are pure functions over their inputs (no globals, no side effects), which makes them straightforward to unit test.
-- **Historical respect, encoded in types.** The naming throughout (`CivilianPlayerState`, `MartialTroopState`, `troops_neutralized`, `DefeatReason`) deliberately avoids the language of arcade shooters. The lack of a `VICTORY` state is enforced at the type level — there is no enum value for it to take.
-
-The point of the project is not to make a fun game. It is to model an asymmetry truthfully, with the simplest server architecture that can do that job, and to keep that architecture small enough to reason about end-to-end.
+| Var | Default |
+|---|---|
+| `PORT` | `3001` |
+| `DATABASE_URL` | `postgres://mayday:mayday@localhost:5432/mayday?sslmode=disable` |
+| `TICK_RATE` / `SNAPSHOT_RATE` | `30` / `15` |
+| `INITIAL_TROOP_COUNT` / `MAX_TROOP_COUNT` | `4` / `30` |
+| `TROOP_DETECTION_RANGE` / `TROOP_ATTACK_RANGE` / `TROOP_DAMAGE` / `TROOP_MOVE_SPEED` | `35` / `22` / `8` / `4` |
+| `PLAYER_MAX_HP` / `PLAYER_MAX_AMMO` / `PLAYER_MOVE_SPEED` / `PLAYER_SHOOT_DAMAGE` | `100` / `24` / `6` / `25` |
+| `SHOOT_MAX_DISTANCE` / `SHOOT_ANGLE_THRESHOLD` / `FIRE_RATE_LIMIT_MS` | `60` / `0.96` / `250` |
+| `SESSION_MAX_DURATION_MS` / `FINAL_STAND_AFTER_MS` / `FORCE_DEFEAT_AFTER_MS` | `600000` / `300000` / `420000` |
+| `SESSION_EVENT_BUFFER_SIZE` / `CLIENT_SEND_BUFFER_SIZE` | `512` / `64` |
