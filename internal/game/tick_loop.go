@@ -32,20 +32,14 @@ func (s *Session) run() {
 		"tick_rate":   s.cfg.TickRate,
 	})
 
-	s.sendNonBlocking(protocol.ServerMessage{
-		Type: protocol.ServerMsgWelcome,
-		Payload: protocol.WelcomePayload{
-			ServerVersion: "mayday-mvp",
-			ServerTime:    time.Now().UnixMilli(),
-		},
+	s.sendType(protocol.ServerMsgWelcome, protocol.WelcomePayload{
+		ServerVersion: "mayday-mvp",
+		ServerTime:    time.Now().UnixMilli(),
 	})
-	s.sendNonBlocking(protocol.ServerMessage{
-		Type: protocol.ServerMsgSessionStarted,
-		Payload: protocol.SessionStartedPayload{
-			SessionID: s.id,
-			TickRate:  s.cfg.TickRate,
-			StartedAt: s.startedAt.UnixMilli(),
-		},
+	s.sendType(protocol.ServerMsgSessionStarted, protocol.SessionStartedPayload{
+		SessionID: s.id,
+		TickRate:  s.cfg.TickRate,
+		StartedAt: s.startedAt.UnixMilli(),
 	})
 
 	tickInterval := time.Second / time.Duration(s.cfg.TickRate)
@@ -138,20 +132,14 @@ func (s *Session) handleInput(msg protocol.ClientMessage, now time.Time) {
 	case msg.Shoot != nil:
 		s.handleShoot(*msg.Shoot, now)
 	case msg.Reload != nil:
-		// MVP: reload simply tops up to MaxAmmo only if zero, with no
-		// timer; keeps the player able to test the system.
 		if s.player.IsAlive && s.player.Ammo == 0 {
 			s.player.Ammo = s.player.MaxAmmo
 		}
 	case msg.Interact != nil:
-		// No interactable objects in the MVP; acknowledge silently.
 	case msg.Ping != nil:
-		s.sendNonBlocking(protocol.ServerMessage{
-			Type: protocol.ServerMsgPong,
-			Payload: protocol.PongPayload{
-				ClientTime: msg.Ping.ClientTime,
-				ServerTime: now.UnixMilli(),
-			},
+		s.sendType(protocol.ServerMsgPong, protocol.PongPayload{
+			ClientTime: msg.Ping.ClientTime,
+			ServerTime: now.UnixMilli(),
 		})
 	}
 }
@@ -166,49 +154,45 @@ func (s *Session) handleShoot(p protocol.ShootPayload, now time.Time) {
 	}
 	out := systems.ProcessPlayerShoot(s.player, s.troops, p.Origin, p.Direction, cfg, now)
 
-	if out.Accepted {
-		s.recordEvent(EventPlayerShot, map[string]any{
-			"seq":          p.Seq,
-			"hit":          out.HitTroopID != "",
-			"hit_troop":    out.HitTroopID,
-			"hit_distance": out.HitDistance,
-		})
-		if out.HitTroopID != "" {
-			s.stats.ShotsHit++
-			s.recordEvent(EventPlayerHitTroop, map[string]any{
-				"troop_id": out.HitTroopID,
-				"damage":   out.DamageDealt,
-				"killed":   out.TroopKilled,
-			})
-			if out.TroopKilled {
-				s.stats.TroopsNeutralized++
-			}
-		}
-	}
-
-	s.sendNonBlocking(protocol.ServerMessage{
-		Type: protocol.ServerMsgShotResult,
-		Payload: protocol.ShotResultPayload{
-			Seq:         p.Seq,
-			Accepted:    out.Accepted,
-			Reason:      out.Reason,
-			HitTroopID:  out.HitTroopID,
-			HitDistance: out.HitDistance,
-			DamageDealt: out.DamageDealt,
-			TroopKilled: out.TroopKilled,
-			AmmoLeft:    s.player.Ammo,
-		},
+	defer s.sendType(protocol.ServerMsgShotResult, protocol.ShotResultPayload{
+		Seq:         p.Seq,
+		Accepted:    out.Accepted,
+		Reason:      out.Reason,
+		HitTroopID:  out.HitTroopID,
+		HitDistance: out.HitDistance,
+		DamageDealt: out.DamageDealt,
+		TroopKilled: out.TroopKilled,
+		AmmoLeft:    s.player.Ammo,
 	})
+
+	if !out.Accepted {
+		return
+	}
+	s.recordEvent(EventPlayerShot, map[string]any{
+		"seq":          p.Seq,
+		"hit":          out.HitTroopID != "",
+		"hit_troop":    out.HitTroopID,
+		"hit_distance": out.HitDistance,
+	})
+	if out.HitTroopID == "" {
+		return
+	}
+	s.stats.ShotsHit++
+	s.recordEvent(EventPlayerHitTroop, map[string]any{
+		"troop_id": out.HitTroopID,
+		"damage":   out.DamageDealt,
+		"killed":   out.TroopKilled,
+	})
+	if out.TroopKilled {
+		s.stats.TroopsNeutralized++
+	}
 }
 
 func (s *Session) handleDirectorUpdate(upd scenario.Update) {
 	if upd.PressureChanged {
-		s.sendNonBlocking(protocol.ServerMessage{
-			Type: protocol.ServerMsgPressureChanged,
-			Payload: protocol.PressureChangedPayload{
-				PressureLevel:     upd.PressureLevel,
-				EncirclementLevel: upd.EncirclementLevel,
-			},
+		s.sendType(protocol.ServerMsgPressureChanged, protocol.PressureChangedPayload{
+			PressureLevel:     upd.PressureLevel,
+			EncirclementLevel: upd.EncirclementLevel,
 		})
 		s.recordEvent(EventPressureChanged, map[string]any{
 			"pressure":     upd.PressureLevel,
@@ -216,13 +200,10 @@ func (s *Session) handleDirectorUpdate(upd scenario.Update) {
 		})
 	}
 	if upd.PhaseChanged {
-		s.sendNonBlocking(protocol.ServerMessage{
-			Type: protocol.ServerMsgScenarioPhaseChanged,
-			Payload: protocol.ScenarioPhaseChangedPayload{
-				PreviousPhase: upd.PreviousPhase,
-				CurrentPhase:  upd.CurrentPhase,
-				Tick:          s.serverTick,
-			},
+		s.sendType(protocol.ServerMsgScenarioPhaseChanged, protocol.ScenarioPhaseChangedPayload{
+			PreviousPhase: upd.PreviousPhase,
+			CurrentPhase:  upd.CurrentPhase,
+			Tick:          s.serverTick,
 		})
 		s.recordEvent(EventPhaseChanged, map[string]any{
 			"previous_phase": upd.PreviousPhase,
@@ -230,12 +211,9 @@ func (s *Session) handleDirectorUpdate(upd scenario.Update) {
 		})
 	}
 	if upd.TriggeredDefeat {
-		s.sendNonBlocking(protocol.ServerMessage{
-			Type: protocol.ServerMsgDefeatTriggered,
-			Payload: protocol.DefeatTriggeredPayload{
-				Reason: upd.DefeatReason,
-				Tick:   s.serverTick,
-			},
+		s.sendType(protocol.ServerMsgDefeatTriggered, protocol.DefeatTriggeredPayload{
+			Reason: upd.DefeatReason,
+			Tick:   s.serverTick,
 		})
 		s.recordEvent(EventDefeatTriggered, map[string]any{
 			"reason": upd.DefeatReason,
@@ -250,7 +228,7 @@ func (s *Session) handleDirectorUpdate(upd scenario.Update) {
 
 func (s *Session) spawnInitialTroops() {
 	for i := 0; i < s.cfg.InitialTroopCount; i++ {
-		s.spawnTroopAroundPlayer(0)
+		s.spawnTroopAroundPlayer()
 	}
 }
 
@@ -275,11 +253,11 @@ func (s *Session) spawnTroopBatch(n int) {
 		if aliveTroopCount(s.troops) >= s.cfg.MaxTroopCount {
 			return
 		}
-		s.spawnTroopAroundPlayer(0)
+		s.spawnTroopAroundPlayer()
 	}
 }
 
-func (s *Session) spawnTroopAroundPlayer(_ float64) {
+func (s *Session) spawnTroopAroundPlayer() {
 	angle := s.rng.Float64() * 2 * math.Pi
 	radius := s.cfg.TroopDetectionRange*0.8 + s.rng.Float64()*5
 	pos := gmath.Vector3{
@@ -300,13 +278,9 @@ func (s *Session) spawnTroopAroundPlayer(_ float64) {
 		SquadID:    "alpha",
 	}
 	s.troops[t.ID] = t
-	s.spawnedTotal++
-	s.sendNonBlocking(protocol.ServerMessage{
-		Type: protocol.ServerMsgTroopSpawned,
-		Payload: protocol.TroopSpawnedPayload{
-			Troop:      troopToSnapshot(t),
-			ServerTick: s.serverTick,
-		},
+	s.sendType(protocol.ServerMsgTroopSpawned, protocol.TroopSpawnedPayload{
+		Troop:      troopToSnapshot(t),
+		ServerTick: s.serverTick,
 	})
 	s.recordEvent(EventTroopSpawned, map[string]any{
 		"troop_id": t.ID,
@@ -315,37 +289,38 @@ func (s *Session) spawnTroopAroundPlayer(_ float64) {
 }
 
 func (s *Session) runAI(_ time.Time, deltaMs int64) {
-	minTroops := MinTroopFloor
 	count := aliveTroopCount(s.troops)
+	percIn := ai.PerceptionInput{
+		PlayerAlive:    s.player.IsAlive,
+		PlayerPosition: s.player.Position,
+		DetectionRange: s.cfg.TroopDetectionRange,
+		AttackRange:    s.cfg.TroopAttackRange,
+	}
+	baseDecision := ai.DecisionInput{
+		Phase:         s.director.CurrentPhase(),
+		Pressure:      s.director.PressureLevel(),
+		Encirclement:  s.director.EncirclementLevel(),
+		EscapeBlocked: s.director.EscapeBlocked(),
+		TroopCount:    count,
+		MaxTroops:     s.cfg.MaxTroopCount,
+		MinTroops:     MinTroopFloor,
+	}
 	for _, t := range s.troops {
 		if t == nil || !t.IsAlive {
 			continue
 		}
-		percIn := ai.PerceptionInput{
-			PlayerAlive:    s.player.IsAlive,
-			PlayerPosition: s.player.Position,
-			DetectionRange: s.cfg.TroopDetectionRange,
-			AttackRange:    s.cfg.TroopAttackRange,
+		decisionIn := baseDecision
+		decisionIn.Troop = ai.TroopSnapshot{
+			ID:       t.ID,
+			Position: t.Position,
+			HP:       t.HP,
+			MaxHP:    t.MaxHP,
+			Ammo:     t.Ammo,
+			IsAlive:  t.IsAlive,
+			State:    t.State,
 		}
-		decisionIn := ai.DecisionInput{
-			Troop: ai.TroopSnapshot{
-				ID:       t.ID,
-				Position: t.Position,
-				HP:       t.HP,
-				MaxHP:    t.MaxHP,
-				Ammo:     t.Ammo,
-				IsAlive:  t.IsAlive,
-				State:    t.State,
-			},
-			Phase:         s.director.CurrentPhase(),
-			Pressure:      s.director.PressureLevel(),
-			Encirclement:  s.director.EncirclementLevel(),
-			EscapeBlocked: s.director.EscapeBlocked(),
-			TroopCount:    count,
-			MaxTroops:     s.cfg.MaxTroopCount,
-			MinTroops:     minTroops,
-		}
-		_, decision := s.aiCtrl.Update(t.Position, decisionIn, percIn)
+		decisionIn.Perception = ai.Perceive(t.Position, percIn)
+		decision := ai.Decide(decisionIn)
 		t.State = decision.NextState
 		s.applyTroopActions(t, decision.Actions, deltaMs)
 	}
@@ -365,15 +340,14 @@ func (s *Session) applyTroopActions(t *state.MartialTroopState, actions []ai.Act
 				t.Yaw = math.Atan2(dx, dz)
 			}
 		case ai.ActionShoot:
-			t.LastKnownTargetPosition = clonePoint(s.player.Position)
+			pos := s.player.Position
+			t.LastKnownTargetPosition = &pos
 		case ai.ActionSuppressArea:
-			// Suppression has no per-action mechanical effect in MVP beyond
-			// emitting an event; ammo/damage flows through the shoot path.
 		case ai.ActionTakeCover:
 			t.Velocity = gmath.Vector3{}
 		case ai.ActionCallReinforcement:
-			if aliveTroopCount(s.troops) < s.cfg.MaxTroopCount && s.spawnedTotal < s.cfg.MaxTroopCount {
-				s.spawnTroopAroundPlayer(0)
+			if aliveTroopCount(s.troops) < s.cfg.MaxTroopCount {
+				s.spawnTroopAroundPlayer()
 			}
 		}
 	}
@@ -403,14 +377,11 @@ func (s *Session) applyTroopShots(now time.Time) {
 			continue
 		}
 		s.stats.DamageTaken += res.AppliedDamage
-		s.sendNonBlocking(protocol.ServerMessage{
-			Type: protocol.ServerMsgDamageTaken,
-			Payload: protocol.DamageTakenPayload{
-				Source:      "martial_troop",
-				SourceID:    t.ID,
-				Damage:      res.AppliedDamage,
-				RemainingHP: res.RemainingHP,
-			},
+		s.sendType(protocol.ServerMsgDamageTaken, protocol.DamageTakenPayload{
+			Source:      "martial_troop",
+			SourceID:    t.ID,
+			Damage:      res.AppliedDamage,
+			RemainingHP: res.RemainingHP,
 		})
 		s.recordEvent(EventPlayerDamaged, map[string]any{
 			"source_id": t.ID,
@@ -418,9 +389,8 @@ func (s *Session) applyTroopShots(now time.Time) {
 			"hp_left":   res.RemainingHP,
 		})
 		if res.Killed {
-			s.sendNonBlocking(protocol.ServerMessage{
-				Type:    protocol.ServerMsgPlayerDied,
-				Payload: protocol.PlayerDiedPayload{SessionID: s.id, Tick: s.serverTick},
+			s.sendType(protocol.ServerMsgPlayerDied, protocol.PlayerDiedPayload{
+				SessionID: s.id, Tick: s.serverTick,
 			})
 			s.recordEvent(EventPlayerDied, map[string]any{"tick": s.serverTick})
 			return
@@ -436,45 +406,28 @@ func (s *Session) cleanupDeadTroops() {
 	}
 }
 
-func (s *Session) broadcastSnapshot(now time.Time) {
+func (s *Session) broadcastSnapshot(_ time.Time) {
 	troopList := make([]protocol.TroopSnapshot, 0, len(s.troops))
 	for _, t := range s.troops {
 		troopList = append(troopList, troopToSnapshot(t))
 	}
-	events := s.pendingEventSnapshots
-	s.pendingEventSnapshots = s.pendingEventSnapshots[:0]
-	_ = now
-	s.sendNonBlocking(protocol.ServerMessage{
-		Type: protocol.ServerMsgStateSnapshot,
-		Payload: protocol.StateSnapshotPayload{
-			ServerTick:        s.serverTick,
-			SessionID:         s.id,
-			ScenarioPhase:     s.director.CurrentPhase(),
-			PressureLevel:     s.director.PressureLevel(),
-			EncirclementLevel: s.director.EncirclementLevel(),
-			Player:            playerToSnapshot(s.player),
-			Troops:            troopList,
-			Events:            events,
-		},
+	s.sendType(protocol.ServerMsgStateSnapshot, protocol.StateSnapshotPayload{
+		ServerTick:        s.serverTick,
+		SessionID:         s.id,
+		ScenarioPhase:     s.director.CurrentPhase(),
+		PressureLevel:     s.director.PressureLevel(),
+		EncirclementLevel: s.director.EncirclementLevel(),
+		Player:            playerToSnapshot(s.player),
+		Troops:            troopList,
 	})
 }
 
 func (s *Session) recordEvent(t EventType, payload any) {
 	ev := NewEvent(s.id, t, s.serverTick, payload)
-	s.pendingEventSnapshots = append(s.pendingEventSnapshots, protocol.EventSnapshot{
+	s.stats.EventsRecorded++
+	s.sendType(protocol.ServerMsgEventLogged, protocol.EventLoggedPayload{
 		Type:       string(t),
 		ServerTick: s.serverTick,
-	})
-	if len(s.pendingEventSnapshots) > SnapshotEventLimit {
-		s.pendingEventSnapshots = s.pendingEventSnapshots[len(s.pendingEventSnapshots)-SnapshotEventLimit:]
-	}
-	s.stats.EventsRecorded++
-	s.sendNonBlocking(protocol.ServerMessage{
-		Type: protocol.ServerMsgEventLogged,
-		Payload: protocol.EventLoggedPayload{
-			Type:       string(t),
-			ServerTick: s.serverTick,
-		},
 	})
 	rec := storage.EventRecord{
 		ID:         ev.ID,
@@ -496,7 +449,6 @@ func (s *Session) finalize() {
 	finalPhase := s.director.CurrentPhase()
 	defeat := s.director.DefeatReason()
 	if defeat == scenario.DefeatNone {
-		// If we exit without an explicit reason, treat it as disconnected.
 		defeat = scenario.DefeatDisconnected
 	}
 	s.stats.SurvivedMs = endedAt.Sub(s.startedAt).Milliseconds()
@@ -511,19 +463,16 @@ func (s *Session) finalize() {
 		"troops_neutralized": s.stats.TroopsNeutralized,
 	})
 
-	s.sendNonBlocking(protocol.ServerMessage{
-		Type: protocol.ServerMsgSessionEnded,
-		Payload: protocol.SessionEndedPayload{
-			SessionID:         s.id,
-			SurvivedMs:        s.stats.SurvivedMs,
-			FinalPhase:        finalPhase,
-			DefeatReason:      defeat,
-			ShotsFired:        s.stats.ShotsFired,
-			ShotsHit:          s.stats.ShotsHit,
-			DamageTaken:       s.stats.DamageTaken,
-			TroopsNeutralized: s.stats.TroopsNeutralized,
-			EventsRecorded:    s.stats.EventsRecorded,
-		},
+	s.sendType(protocol.ServerMsgSessionEnded, protocol.SessionEndedPayload{
+		SessionID:         s.id,
+		SurvivedMs:        s.stats.SurvivedMs,
+		FinalPhase:        finalPhase,
+		DefeatReason:      defeat,
+		ShotsFired:        s.stats.ShotsFired,
+		ShotsHit:          s.stats.ShotsHit,
+		DamageTaken:       s.stats.DamageTaken,
+		TroopsNeutralized: s.stats.TroopsNeutralized,
+		EventsRecorded:    s.stats.EventsRecorded,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -542,8 +491,8 @@ func (s *Session) finalize() {
 		s.log.Warn("session end persist failed", "err", err)
 	}
 
-	// Close the event buffer last so all recordEvent calls above land in
-	// the persister; then wait for the persister to drain remaining items.
+	// Close the buffer only after the final recordEvent calls so they reach
+	// the persister; then wait for it to drain.
 	close(s.eventBuf)
 	<-s.persisterDone
 }
@@ -577,9 +526,4 @@ func troopToSnapshot(t *state.MartialTroopState) protocol.TroopSnapshot {
 		IsAlive:  t.IsAlive,
 		SquadID:  t.SquadID,
 	}
-}
-
-func clonePoint(v gmath.Vector3) *gmath.Vector3 {
-	out := v
-	return &out
 }

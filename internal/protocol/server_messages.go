@@ -68,11 +68,6 @@ type TroopSnapshot struct {
 	SquadID  string        `json:"squad_id"`
 }
 
-type EventSnapshot struct {
-	Type       string `json:"type"`
-	ServerTick int64  `json:"server_tick"`
-}
-
 type StateSnapshotPayload struct {
 	ServerTick        int64           `json:"server_tick"`
 	SessionID         string          `json:"session_id"`
@@ -81,7 +76,6 @@ type StateSnapshotPayload struct {
 	EncirclementLevel float64         `json:"encirclement_level"`
 	Player            PlayerSnapshot  `json:"player"`
 	Troops            []TroopSnapshot `json:"troops"`
-	Events            []EventSnapshot `json:"events"`
 }
 
 type TroopSpawnedPayload struct {
@@ -89,15 +83,27 @@ type TroopSpawnedPayload struct {
 	ServerTick int64         `json:"server_tick"`
 }
 
+type ShotReason string
+
+const (
+	ShotReasonHit          ShotReason = "hit"
+	ShotReasonMiss         ShotReason = "miss"
+	ShotReasonDead         ShotReason = "dead"
+	ShotReasonNoAmmo       ShotReason = "no_ammo"
+	ShotReasonFireRate     ShotReason = "fire_rate"
+	ShotReasonBadDirection ShotReason = "bad_direction"
+	ShotReasonNoPlayer     ShotReason = "no_player"
+)
+
 type ShotResultPayload struct {
-	Seq         int64   `json:"seq"`
-	Accepted    bool    `json:"accepted"`
-	Reason      string  `json:"reason"`
-	HitTroopID  string  `json:"hit_troop_id"`
-	HitDistance float64 `json:"hit_distance"`
-	DamageDealt int     `json:"damage_dealt"`
-	TroopKilled bool    `json:"troop_killed"`
-	AmmoLeft    int     `json:"ammo_left"`
+	Seq         int64      `json:"seq"`
+	Accepted    bool       `json:"accepted"`
+	Reason      ShotReason `json:"reason"`
+	HitTroopID  string     `json:"hit_troop_id"`
+	HitDistance float64    `json:"hit_distance"`
+	DamageDealt int        `json:"damage_dealt"`
+	TroopKilled bool       `json:"troop_killed"`
+	AmmoLeft    int        `json:"ammo_left"`
 }
 
 type DamageTakenPayload struct {

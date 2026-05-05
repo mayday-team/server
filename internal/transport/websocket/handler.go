@@ -26,11 +26,7 @@ func NewHandler(log *slog.Logger, sessions *game.SessionManager, metrics *observ
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
-			CheckOrigin: func(_ *http.Request) bool {
-				// MVP allows any origin; production should pin allowed
-				// origins via configuration.
-				return true
-			},
+			CheckOrigin:     func(_ *http.Request) bool { return true },
 		},
 	}
 }

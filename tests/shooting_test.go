@@ -9,6 +9,7 @@ import (
 	gmath "github.com/mayday-team/server/internal/game/math"
 	"github.com/mayday-team/server/internal/game/state"
 	"github.com/mayday-team/server/internal/game/systems"
+	"github.com/mayday-team/server/internal/protocol"
 )
 
 func basePlayer() *state.CivilianPlayerState {
@@ -45,7 +46,7 @@ func TestPlayerCannotShootWhenDead(t *testing.T) {
 		shootCfg(), time.Now(),
 	)
 	assert.False(t, out.Accepted)
-	assert.Equal(t, "dead", out.Reason)
+	assert.Equal(t, protocol.ShotReasonDead, out.Reason)
 }
 
 func TestPlayerCannotShootWithoutAmmo(t *testing.T) {
@@ -56,7 +57,7 @@ func TestPlayerCannotShootWithoutAmmo(t *testing.T) {
 		shootCfg(), time.Now(),
 	)
 	assert.False(t, out.Accepted)
-	assert.Equal(t, "no_ammo", out.Reason)
+	assert.Equal(t, protocol.ShotReasonNoAmmo, out.Reason)
 }
 
 func TestFireRateLimit(t *testing.T) {
@@ -68,7 +69,7 @@ func TestFireRateLimit(t *testing.T) {
 		shootCfg(), now.Add(50*time.Millisecond),
 	)
 	assert.False(t, out.Accepted)
-	assert.Equal(t, "fire_rate", out.Reason)
+	assert.Equal(t, protocol.ShotReasonFireRate, out.Reason)
 }
 
 func TestShootHit(t *testing.T) {
@@ -81,7 +82,7 @@ func TestShootHit(t *testing.T) {
 		shootCfg(), time.Now(),
 	)
 	assert.True(t, out.Accepted)
-	assert.Equal(t, "hit", out.Reason)
+	assert.Equal(t, protocol.ShotReasonHit, out.Reason)
 	assert.Equal(t, "t1", out.HitTroopID)
 	assert.Equal(t, 25, out.DamageDealt)
 	assert.Equal(t, 23, p.Ammo, "ammo decremented to 23")
@@ -98,7 +99,7 @@ func TestShootMissOffAngle(t *testing.T) {
 		shootCfg(), time.Now(),
 	)
 	assert.True(t, out.Accepted)
-	assert.Equal(t, "miss", out.Reason)
+	assert.Equal(t, protocol.ShotReasonMiss, out.Reason)
 	assert.Empty(t, out.HitTroopID)
 	assert.Equal(t, 23, p.Ammo, "ammo still consumed on a fired shot")
 }

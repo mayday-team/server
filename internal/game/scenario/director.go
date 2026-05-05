@@ -1,6 +1,9 @@
 package scenario
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // Config captures the timing parameters that govern phase progression and
 // forced defeat. All values are absolute durations from session start.
@@ -90,7 +93,7 @@ func (d *Director) Tick(in Input) Update {
 	})
 	d.encirclementLevel = ComputeEncirclement(elapsedMs, forceDefeatMs)
 
-	d.advancePhase(in, elapsedMs, finalStandMs, forceDefeatMs)
+	d.advancePhase(in, elapsedMs, finalStandMs)
 
 	upd := Update{
 		PreviousPhase:     prevPhase,
@@ -101,18 +104,20 @@ func (d *Director) Tick(in Input) Update {
 		EncirclementLevel: d.encirclementLevel,
 	}
 
-	if !d.forcedDefeatTriggered {
-		if reason, ok := d.checkDefeatTriggers(in, elapsedMs, forceDefeatMs); ok {
-			d.forcedDefeatTriggered = true
-			d.defeatReason = reason
-			d.transitionTo(PhaseDefeat, in.Now)
-			upd.CurrentPhase = d.currentPhase
-			upd.PhaseChanged = upd.PreviousPhase != d.currentPhase
-			upd.TriggeredDefeat = true
-			upd.DefeatReason = reason
-		}
+	if d.forcedDefeatTriggered {
+		return upd
 	}
-
+	reason, ok := d.checkDefeatTriggers(in, elapsedMs, forceDefeatMs)
+	if !ok {
+		return upd
+	}
+	d.forcedDefeatTriggered = true
+	d.defeatReason = reason
+	d.transitionTo(PhaseDefeat, in.Now)
+	upd.CurrentPhase = d.currentPhase
+	upd.PhaseChanged = upd.PreviousPhase != d.currentPhase
+	upd.TriggeredDefeat = true
+	upd.DefeatReason = reason
 	return upd
 }
 
@@ -135,7 +140,7 @@ func (d *Director) MarkDisconnected(now time.Time) Update {
 	}
 }
 
-func (d *Director) advancePhase(in Input, elapsedMs, finalStandMs, _ int64) {
+func (d *Director) advancePhase(in Input, elapsedMs, finalStandMs int64) {
 	if d.currentPhase == PhaseDefeat {
 		return
 	}
@@ -189,9 +194,5 @@ func (d *Director) checkDefeatTriggers(in Input, elapsedMs, forceDefeatMs int64)
 }
 
 func significantPressureChange(prev, next float64) bool {
-	diff := next - prev
-	if diff < 0 {
-		diff = -diff
-	}
-	return diff >= 0.05
+	return math.Abs(next-prev) >= 0.05
 }

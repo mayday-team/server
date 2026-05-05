@@ -1,6 +1,8 @@
 package systems
 
 import (
+	"math"
+
 	gmath "github.com/mayday-team/server/internal/game/math"
 	"github.com/mayday-team/server/internal/game/state"
 )
@@ -86,14 +88,12 @@ func MoveTroopToward(t *state.MartialTroopState, target gmath.Vector3, deltaMs i
 	return dist - maxStep
 }
 
-// ApplyPlayerLook updates yaw and pitch on the player. No clamping is done
-// here beyond rejecting NaN; the client UI is expected to deliver sane
-// values, but the server still accepts whatever it gets without crashing.
+// ApplyPlayerLook updates yaw and pitch on the player, rejecting NaN.
 func ApplyPlayerLook(p *state.CivilianPlayerState, yaw, pitch float64) {
 	if p == nil {
 		return
 	}
-	if yaw != yaw || pitch != pitch { // NaN check
+	if math.IsNaN(yaw) || math.IsNaN(pitch) {
 		return
 	}
 	p.Yaw = yaw

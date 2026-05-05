@@ -5,10 +5,10 @@ import (
 
 	gmath "github.com/mayday-team/server/internal/game/math"
 	"github.com/mayday-team/server/internal/game/state"
+	"github.com/mayday-team/server/internal/protocol"
 )
 
-// ShootConfig captures the shoot-validation parameters for a single fire
-// attempt. The session populates this from the typed Config.
+// ShootConfig is the validation parameter set for one fire attempt.
 type ShootConfig struct {
 	MaxDistance    float64
 	AngleThreshold float64
@@ -19,7 +19,7 @@ type ShootConfig struct {
 // ShotOutcome describes the result of one server-validated shot.
 type ShotOutcome struct {
 	Accepted    bool
-	Reason      string
+	Reason      protocol.ShotReason
 	HitTroopID  string
 	HitDistance float64
 	DamageDealt int
@@ -37,19 +37,19 @@ func ProcessPlayerShoot(
 	now time.Time,
 ) ShotOutcome {
 	if p == nil {
-		return ShotOutcome{Reason: "no_player"}
+		return ShotOutcome{Reason: protocol.ShotReasonNoPlayer}
 	}
 	if !p.IsAlive {
-		return ShotOutcome{Reason: "dead"}
+		return ShotOutcome{Reason: protocol.ShotReasonDead}
 	}
 	if p.Ammo <= 0 {
-		return ShotOutcome{Reason: "no_ammo"}
+		return ShotOutcome{Reason: protocol.ShotReasonNoAmmo}
 	}
 	if !p.LastShotAt.IsZero() && now.Sub(p.LastShotAt) < cfg.FireRateLimit {
-		return ShotOutcome{Reason: "fire_rate"}
+		return ShotOutcome{Reason: protocol.ShotReasonFireRate}
 	}
 	if gmath.IsZero(direction) {
-		return ShotOutcome{Reason: "bad_direction"}
+		return ShotOutcome{Reason: protocol.ShotReasonBadDirection}
 	}
 
 	p.Ammo--
@@ -76,7 +76,7 @@ func ProcessPlayerShoot(
 	}
 
 	if hitID == "" {
-		return ShotOutcome{Accepted: true, Reason: "miss"}
+		return ShotOutcome{Accepted: true, Reason: protocol.ShotReasonMiss}
 	}
 
 	t := troops[hitID]
@@ -84,7 +84,7 @@ func ProcessPlayerShoot(
 
 	return ShotOutcome{
 		Accepted:    true,
-		Reason:      "hit",
+		Reason:      protocol.ShotReasonHit,
 		HitTroopID:  hitID,
 		HitDistance: hitDist,
 		DamageDealt: dmgRes.AppliedDamage,

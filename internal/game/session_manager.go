@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/mayday-team/server/internal/config"
 	"github.com/mayday-team/server/internal/observability"
-	"github.com/mayday-team/server/internal/protocol"
 	"github.com/mayday-team/server/internal/storage"
 )
 
@@ -106,10 +105,3 @@ func (m *SessionManager) StopAll() {
 	}
 	m.mu.Unlock()
 }
-
-// Ensure SessionManager satisfies the protocol.ServerMessage flow contract.
-var _ Sender = (*nopSender)(nil)
-
-type nopSender struct{}
-
-func (nopSender) Send(_ protocol.ServerMessage) {}

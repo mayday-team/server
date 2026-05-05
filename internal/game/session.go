@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mayday-team/server/internal/ai"
 	"github.com/mayday-team/server/internal/config"
 	gmath "github.com/mayday-team/server/internal/game/math"
 	"github.com/mayday-team/server/internal/game/scenario"
@@ -50,7 +49,6 @@ type Session struct {
 	eventRepo   storage.EventRepository
 	sessionRepo storage.SessionRepository
 
-	aiCtrl   *ai.Controller
 	director *scenario.Director
 
 	player *state.CivilianPlayerState
@@ -59,9 +57,8 @@ type Session struct {
 	serverTick int64
 	rng        *rand.Rand
 
-	pendingEventSnapshots []protocol.EventSnapshot
-	eventBuf              chan storage.EventRecord
-	persisterDone         chan struct{}
+	eventBuf      chan storage.EventRecord
+	persisterDone chan struct{}
 
 	stats systems.SessionStats
 
@@ -73,8 +70,6 @@ type Session struct {
 
 	onceStop sync.Once
 	doneCh   chan struct{}
-
-	spawnedTotal int
 }
 
 // NewSession constructs a Session. The tick loop is not started until Start
@@ -120,7 +115,6 @@ func NewSession(p SessionParams) *Session {
 		sender:      p.Sender,
 		eventRepo:   p.EventRepo,
 		sessionRepo: p.SessionRepo,
-		aiCtrl:      ai.NewController(),
 		director: scenario.NewDirector(p.Now, scenario.Config{
 			FinalStandAfter:  cfg.FinalStandAfter,
 			ForceDefeatAfter: cfg.ForceDefeatAfter,
@@ -208,11 +202,11 @@ func (s *Session) runEventPersister() {
 	}
 }
 
-func (s *Session) sendNonBlocking(msg protocol.ServerMessage) {
+func (s *Session) sendType(msgType string, payload any) {
 	if s.sender == nil {
 		return
 	}
-	s.sender.Send(msg)
+	s.sender.Send(protocol.ServerMessage{Type: msgType, Payload: payload})
 }
 
 func aliveTroopCount(troops map[string]*state.MartialTroopState) int {

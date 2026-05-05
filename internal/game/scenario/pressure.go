@@ -57,11 +57,5 @@ func clamp01(v float64) float64 {
 	if math.IsNaN(v) {
 		return 0
 	}
-	if v < 0 {
-		return 0
-	}
-	if v > 1 {
-		return 1
-	}
-	return v
+	return min(1, max(0, v))
 }
