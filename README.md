@@ -1,6 +1,6 @@
 # mayday-server
 
-Authoritative Go game server for **Mayday**, a single-player web 3D FPS. The client only collects input and renders; the server owns all simulation state, hit validation, AI, scenario progression, and the session event log.
+**Mayday**(싱글플레이 웹 3D FPS)의 권위형(authoritative) Go 게임 서버. 클라이언트는 입력 수집과 렌더링만 담당하고, 시뮬레이션 상태·히트 검증·AI·시나리오 진행·세션 이벤트 로그는 모두 서버가 소유한다.
 
 
 ```mermaid
@@ -28,46 +28,46 @@ flowchart LR
     Sess -- async event buffer --> DB
 ```
 
-### Concurrency model
+### 동시성 모델
 
-- One **Session goroutine** per connection. It is the only goroutine that mutates simulation state.
-- One **WebSocket reader** + **WebSocket writer** per connection, both buffered.
-- One **event persister** goroutine per session, drains a buffered channel into PostgreSQL so a slow DB never stalls the tick loop.
-- Mutexes appear only around the session map and the per-connection send buffer.
+- 연결당 **Session goroutine** 하나. 시뮬레이션 상태를 변경하는 유일한 고루틴이다.
+- 연결당 **WebSocket reader** + **WebSocket writer** 각 하나, 둘 다 버퍼드 채널 사용.
+- 세션마다 **이벤트 퍼시스터** 고루틴 하나. 버퍼드 채널을 PostgreSQL로 비동기 드레인하므로 DB가 느려도 틱 루프는 멈추지 않는다.
+- 뮤텍스는 세션 맵과 연결별 송신 버퍼 주변에만 등장한다.
 
-### Package layout
+### 패키지 구조
 
 ```
 cmd/server/                  main()
-internal/config/             env-backed typed config
-internal/logger/             slog setup
-internal/observability/      counters, uptime
-internal/protocol/           envelope + typed client/server messages
-internal/transport/http/     /health, HTTP bootstrap
+internal/config/             환경변수 기반 타입드 컨피그
+internal/logger/             slog 설정
+internal/observability/      카운터, uptime
+internal/protocol/           엔벨로프 + 타입드 클라이언트/서버 메시지
+internal/transport/http/     /health, HTTP 부트스트랩
 internal/transport/websocket/  gorilla/websocket reader & writer
-internal/storage/            pgx pool + Event/Session repos (+ noop / memory)
-internal/game/               Session, SessionManager, tick loop, events
+internal/storage/            pgx 풀 + Event/Session repo (+ noop / memory 폴백)
+internal/game/               Session, SessionManager, 틱 루프, 이벤트
 internal/game/state/         CivilianPlayerState, MartialTroopState
 internal/game/math/          Vector3, raycast
 internal/game/scenario/      Phase, DefeatReason, ScenarioDirector
 internal/game/systems/       movement, shooting, damage, defeat, objective
-internal/ai/                 FSM states, perception, pure Decide()
-internal/ai/behavior/        per-state behavior helpers
-migrations/                  goose-driven SQL
-tests/                       cross-package tests
+internal/ai/                 FSM 상태, 지각, 순수 Decide()
+internal/ai/behavior/        상태별 행동 헬퍼
+migrations/                  goose 기반 SQL
+tests/                       크로스 패키지 테스트
 ```
 
-### Scenario phases
+### 시나리오 페이즈
 
-`INITIAL_CONTACT → ESCALATION → REINFORCEMENT → ENCIRCLEMENT → FINAL_STAND → DEFEAT`. There is no `VICTORY`. Defeat reasons: `PLAYER_KILLED`, `OVERRUN`, `AMMO_EXHAUSTED`, `ENCIRCLED`, `SCRIPTED_FINAL_STAND`, `DISCONNECTED`.
+`INITIAL_CONTACT → ESCALATION → REINFORCEMENT → ENCIRCLEMENT → FINAL_STAND → DEFEAT`. `VICTORY`는 존재하지 않는다. 패배 사유: `PLAYER_KILLED`, `OVERRUN`, `AMMO_EXHAUSTED`, `ENCIRCLED`, `SCRIPTED_FINAL_STAND`, `DISCONNECTED`.
 
-### Troop AI states
+### 진압군 AI 상태
 
-`PATROL`, `ADVANCE`, `CHASE`, `ATTACK`, `SUPPRESS`, `FLANK`, `BLOCK_EXIT`, `CALL_REINFORCEMENT`, `TAKE_COVER`, `DEAD`. Pure `ai.Decide(input) → (state, []Action)`.
+`PATROL`, `ADVANCE`, `CHASE`, `ATTACK`, `SUPPRESS`, `FLANK`, `BLOCK_EXIT`, `CALL_REINFORCEMENT`, `TAKE_COVER`, `DEAD`. 결정 로직은 순수 함수 `ai.Decide(input) → (state, []Action)`.
 
 ---
 
-## API spec
+## API 스펙
 
 ### HTTP
 
@@ -86,17 +86,17 @@ tests/                       cross-package tests
 
 #### `GET /ws`
 
-Subprotocol: none. All frames are UTF-8 JSON. Every frame is wrapped in:
+서브프로토콜 없음. 모든 프레임은 UTF-8 JSON이며, 다음 엔벨로프로 감싼다:
 
 ```json
 { "type": "<message_type>", "payload": { ... } }
 ```
 
-The first message from the client **must** be `start_session`. Anything else returns an `error` frame with code `session_not_started`.
+클라이언트의 첫 메시지는 **반드시** `start_session`이어야 한다. 그 외에는 `error` 프레임(`code: session_not_started`)이 응답된다.
 
 ---
 
-### Client → Server messages
+### Client → Server 메시지
 
 #### `start_session`
 
@@ -117,7 +117,7 @@ The first message from the client **must** be `start_session`. Anything else ret
 }
 ```
 
-`delta_ms` is clamped server-side (max 100 ms) to prevent teleport.
+`delta_ms`는 텔레포트 방지를 위해 서버에서 100ms로 클램프된다.
 
 #### `player_look`
 
@@ -139,7 +139,7 @@ The first message from the client **must** be `start_session`. Anything else ret
 }
 ```
 
-The server runs its own raycast. The reported hit (if any) is computed server-side; client-supplied hit results are ignored.
+레이캐스트는 서버가 직접 수행한다. 히트 결과는 전적으로 서버 계산이며, 클라이언트가 보낸 히트 정보는 무시된다.
 
 #### `reload`
 
@@ -161,7 +161,7 @@ The server runs its own raycast. The reported hit (if any) is computed server-si
 
 ---
 
-### Server → Client messages
+### Server → Client 메시지
 
 #### `welcome`
 
@@ -175,7 +175,7 @@ The server runs its own raycast. The reported hit (if any) is computed server-si
 { "type": "session_started", "payload": { "session_id": "uuid", "tick_rate": 30, "started_at": 1714824000000 } }
 ```
 
-#### `state_snapshot` (every snapshot tick, default 15Hz)
+#### `state_snapshot` (스냅샷 틱마다, 기본 15Hz)
 
 ```json
 {
@@ -239,7 +239,7 @@ The server runs its own raycast. The reported hit (if any) is computed server-si
 }
 ```
 
-`reason` is one of: `hit`, `miss`, `dead`, `no_ammo`, `fire_rate`, `bad_direction`, `no_player`.
+`reason` 값: `hit`, `miss`, `dead`, `no_ammo`, `fire_rate`, `bad_direction`, `no_player`.
 
 #### `damage_taken`
 
@@ -265,7 +265,7 @@ The server runs its own raycast. The reported hit (if any) is computed server-si
 { "type": "pressure_changed", "payload": { "pressure_level": 0.62, "encirclement_level": 0.45 } }
 ```
 
-Emitted only when pressure moves by ≥ 0.05.
+압력값이 0.05 이상 변할 때만 송신된다.
 
 #### `defeat_triggered`
 
@@ -298,7 +298,7 @@ Emitted only when pressure moves by ≥ 0.05.
 { "type": "event_logged", "payload": { "type": "PLAYER_HIT_TROOP", "server_tick": 950 } }
 ```
 
-Lightweight notification only. Full payloads live in `game_events` (PostgreSQL).
+알림 용도의 경량 메시지. 풀 페이로드는 PostgreSQL의 `game_events`에 저장된다.
 
 #### `pong`
 
@@ -312,11 +312,11 @@ Lightweight notification only. Full payloads live in `game_events` (PostgreSQL).
 { "type": "error", "payload": { "code": "parse_error", "message": "..." } }
 ```
 
-Error codes: `parse_error`, `session_not_started`, plus the parse error variants `invalid_json`, `unknown_message_type`, `malformed_payload`, `empty_message`.
+에러 코드: `parse_error`, `session_not_started`, 그리고 파서 단계 에러인 `invalid_json`, `unknown_message_type`, `malformed_payload`, `empty_message`.
 
 ---
 
-## Persisted schema
+## 영속화 스키마
 
 ```sql
 game_sessions(
@@ -332,27 +332,27 @@ game_events(
 )
 ```
 
-Indexes: `game_events(session_id, server_tick)`, `game_events(type)`, `game_sessions(started_at)`.
+인덱스: `game_events(session_id, server_tick)`, `game_events(type)`, `game_sessions(started_at)`.
 
-Event types: `SESSION_STARTED`, `PHASE_CHANGED`, `PRESSURE_CHANGED`, `TROOP_SPAWNED`, `PLAYER_SHOT`, `PLAYER_HIT_TROOP`, `PLAYER_DAMAGED`, `PLAYER_DIED`, `DEFEAT_TRIGGERED`, `SESSION_ENDED`.
+이벤트 타입: `SESSION_STARTED`, `PHASE_CHANGED`, `PRESSURE_CHANGED`, `TROOP_SPAWNED`, `PLAYER_SHOT`, `PLAYER_HIT_TROOP`, `PLAYER_DAMAGED`, `PLAYER_DIED`, `DEFEAT_TRIGGERED`, `SESSION_ENDED`.
 
 ---
 
-## Run
+## 실행
 
 ```bash
 cp .env.example .env
-make run                  # local
+make run                  # 로컬 실행
 make test                 # go test -count=1 -race ./...
-docker compose up --build # postgres + server
-make migrate-up           # requires goose
+docker compose up --build # postgres + 서버 동시 기동
+make migrate-up           # goose 필요
 ```
 
-If `DATABASE_URL` is unset or unreachable, the server boots with no-op repositories — the simulation still runs.
+`DATABASE_URL`이 비어있거나 접속 불가일 경우 서버는 noop 리포지토리로 부팅된다 — 시뮬레이션은 정상 동작한다.
 
-Default port: `:3001`.
+기본 포트: `:3001`.
 
-## Config (env)
+## 환경변수
 
 | Var | Default |
 |---|---|
