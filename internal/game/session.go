@@ -53,6 +53,9 @@ type Session struct {
 
 	player *state.CivilianPlayerState
 	troops map[string]*state.MartialTroopState
+	troopDisplayPhase map[string]int
+	phaseTroopsTotal  map[int]int
+	phaseTroopsKilled map[int]int
 
 	serverTick int64
 	rng        *rand.Rand
@@ -120,8 +123,11 @@ func NewSession(p SessionParams) *Session {
 			ForceDefeatAfter: cfg.ForceDefeatAfter,
 			MaxTroops:        cfg.MaxTroopCount,
 		}),
-		player:        player,
-		troops:        make(map[string]*state.MartialTroopState),
+		player:             player,
+		troops:             make(map[string]*state.MartialTroopState),
+		troopDisplayPhase:  make(map[string]int),
+		phaseTroopsTotal:   make(map[int]int),
+		phaseTroopsKilled:  make(map[int]int),
 		rng:           rng,
 		eventBuf:      make(chan storage.EventRecord, cfg.SessionEventBufferSize),
 		persisterDone: make(chan struct{}),

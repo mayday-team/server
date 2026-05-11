@@ -55,7 +55,7 @@ func Load() Config {
 		SnapshotRate: getInt("SNAPSHOT_RATE", 15),
 
 		InitialTroopCount:   getInt("INITIAL_TROOP_COUNT", 4),
-		MaxTroopCount:       getInt("MAX_TROOP_COUNT", 30),
+		MaxTroopCount:       getInt("MAX_TROOP_COUNT", 45),
 		TroopDetectionRange: getFloat("TROOP_DETECTION_RANGE", 35),
 		TroopAttackRange:    getFloat("TROOP_ATTACK_RANGE", 22),
 		TroopDamage:         getInt("TROOP_DAMAGE", 4),

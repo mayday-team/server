@@ -73,6 +73,9 @@ type StateSnapshotPayload struct {
 	ServerTick        int64           `json:"server_tick"`
 	SessionID         string          `json:"session_id"`
 	ScenarioPhase     scenario.Phase  `json:"scenario_phase"`
+	DisplayPhase      int             `json:"display_phase"`
+	PhaseTroopsKilled int             `json:"phase_troops_killed"`
+	PhaseTroopsTotal  int             `json:"phase_troops_total"`
 	PressureLevel     float64         `json:"pressure_level"`
 	EncirclementLevel float64         `json:"encirclement_level"`
 	Player            PlayerSnapshot  `json:"player"`

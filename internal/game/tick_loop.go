@@ -189,6 +189,11 @@ func (s *Session) handleShoot(p protocol.ShootPayload, now time.Time) {
 	})
 	if out.TroopKilled {
 		s.stats.TroopsNeutralized++
+		displayPhase := s.troopDisplayPhase[out.HitTroopID]
+		if displayPhase == 0 {
+			displayPhase = displayPhaseFor(s.director.CurrentPhase())
+		}
+		s.phaseTroopsKilled[displayPhase]++
 	}
 }
 
@@ -230,6 +235,17 @@ func (s *Session) handleDirectorUpdate(upd scenario.Update) {
 	}
 }
 
+func displayPhaseFor(p scenario.Phase) int {
+	switch p {
+	case scenario.PhaseReinforcement, scenario.PhaseEncirclement:
+		return 2
+	case scenario.PhaseFinalStand, scenario.PhaseDefeat:
+		return 3
+	default:
+		return 1
+	}
+}
+
 func (s *Session) spawnInitialTroops() {
 	for i := 0; i < s.cfg.InitialTroopCount; i++ {
 		s.spawnTroopAroundPlayer()
@@ -244,11 +260,11 @@ func (s *Session) maybeSpawnTroops(upd scenario.Update, _ time.Time) {
 	case scenario.PhaseEscalation:
 		s.spawnTroopBatch(2)
 	case scenario.PhaseReinforcement:
-		s.spawnTroopBatch(4)
-	case scenario.PhaseEncirclement:
-		s.spawnTroopBatch(5)
-	case scenario.PhaseFinalStand:
 		s.spawnTroopBatch(6)
+	case scenario.PhaseEncirclement:
+		s.spawnTroopBatch(8)
+	case scenario.PhaseFinalStand:
+		s.spawnTroopBatch(18)
 	}
 }
 
@@ -282,6 +298,9 @@ func (s *Session) spawnTroopAroundPlayer() {
 		SquadID:    "alpha",
 	}
 	s.troops[t.ID] = t
+	displayPhase := displayPhaseFor(s.director.CurrentPhase())
+	s.troopDisplayPhase[t.ID] = displayPhase
+	s.phaseTroopsTotal[displayPhase]++
 	s.sendType(protocol.ServerMsgTroopSpawned, protocol.TroopSpawnedPayload{
 		Troop:      troopToSnapshot(t),
 		ServerTick: s.serverTick,
@@ -362,6 +381,15 @@ func (s *Session) applyTroopShots(now time.Time) {
 		return
 	}
 	fireRate := time.Duration(TroopFireRateMs) * time.Millisecond
+	damageMultiplier := 1
+	accuracyMultiplier := 1.0
+	attackRangeBonus := 0.0
+	if displayPhaseFor(s.director.CurrentPhase()) == 3 {
+		fireRate = 320 * time.Millisecond
+		damageMultiplier = 4
+		accuracyMultiplier = 1.55
+		attackRangeBonus = 10
+	}
 	for _, t := range s.troops {
 		if t == nil || !t.IsAlive {
 			continue
@@ -370,18 +398,22 @@ func (s *Session) applyTroopShots(now time.Time) {
 			continue
 		}
 		dist := gmath.Distance(t.Position, s.player.Position)
-		if dist > s.cfg.TroopAttackRange {
+		attackRange := s.cfg.TroopAttackRange + attackRangeBonus
+		if dist > attackRange {
 			continue
 		}
 		// Distance-falloff accuracy: full base accuracy at point-blank,
 		// scaled down to 60% of base at max attack range.
-		hitChance := s.cfg.TroopBaseAccuracy
-		if s.cfg.TroopAttackRange > 0 {
-			hitChance *= 1 - (dist/s.cfg.TroopAttackRange)*0.4
+		hitChance := s.cfg.TroopBaseAccuracy * accuracyMultiplier
+		if attackRange > 0 {
+			hitChance *= 1 - (dist/attackRange)*0.4
+		}
+		if hitChance > 0.98 {
+			hitChance = 0.98
 		}
 		damage := 0
 		if s.rng.Float64() < hitChance {
-			damage = s.cfg.TroopDamage
+			damage = s.cfg.TroopDamage * damageMultiplier
 		}
 		res, fired := systems.TroopShootAttempt(t, s.player, damage, fireRate, now)
 		if !fired {
@@ -439,6 +471,9 @@ func (s *Session) broadcastSnapshot(_ time.Time) {
 		ServerTick:        s.serverTick,
 		SessionID:         s.id,
 		ScenarioPhase:     s.director.CurrentPhase(),
+		DisplayPhase:      displayPhaseFor(s.director.CurrentPhase()),
+		PhaseTroopsKilled: s.phaseTroopsKilled[displayPhaseFor(s.director.CurrentPhase())],
+		PhaseTroopsTotal:  s.phaseTroopsTotal[displayPhaseFor(s.director.CurrentPhase())],
 		PressureLevel:     s.director.PressureLevel(),
 		EncirclementLevel: s.director.EncirclementLevel(),
 		Player:            playerToSnapshot(s.player),
