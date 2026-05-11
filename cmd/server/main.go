@@ -49,7 +49,7 @@ func main() {
 
 	sessions := game.NewSessionManager(cfg, log, eventRepo, sessionRepo, metrics)
 
-	srv := httpx.New(":"+cfg.Port, log, sessions, metrics)
+	srv := httpx.New(":"+cfg.Port, log, sessions, metrics, cfg)
 
 	errCh := make(chan error, 1)
 	go func() {

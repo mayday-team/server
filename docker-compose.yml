@@ -3,13 +3,13 @@ services:
     restart: unless-stopped
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: mayday
-      POSTGRES_PASSWORD: mayday
-      POSTGRES_DB: mayday
+      POSTGRES_USER: ${POSTGRES_USER:-mayday}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set (e.g. in .env)}
+      POSTGRES_DB: ${POSTGRES_DB:-mayday}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mayday -d mayday"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mayday} -d ${POSTGRES_DB:-mayday}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -22,10 +22,18 @@ services:
         condition: service_healthy
     environment:
       PORT: "3001"
-      DATABASE_URL: postgres://mayday:mayday@postgres:5432/mayday?sslmode=disable
-      LOG_LEVEL: info
+      DATABASE_URL: postgres://${POSTGRES_USER:-mayday}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mayday}?sslmode=disable
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      MAX_SESSIONS: ${MAX_SESSIONS:-100}
     ports:
       - "3001:3001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3001/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
 volumes:
   postgres_data: {}

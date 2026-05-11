@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/mayday-team/server/internal/config"
 	"github.com/mayday-team/server/internal/game"
 	"github.com/mayday-team/server/internal/observability"
 	"github.com/mayday-team/server/internal/transport/websocket"
@@ -20,10 +21,10 @@ type Server struct {
 
 // New constructs the HTTP server. The websocket handler is given the shared
 // session manager so each accepted connection gets its own session.
-func New(addr string, log *slog.Logger, sessions *game.SessionManager, metrics *observability.Metrics) *Server {
+func New(addr string, log *slog.Logger, sessions *game.SessionManager, metrics *observability.Metrics, cfg config.Config) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", NewHealthHandler(metrics))
-	mux.Handle("/ws", websocket.NewHandler(log, sessions, metrics))
+	mux.Handle("/ws", websocket.NewHandler(log, sessions, metrics, cfg))
 
 	return &Server{
 		log:  log,
