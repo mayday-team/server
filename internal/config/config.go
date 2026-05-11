@@ -62,7 +62,7 @@ func Load() Config {
 		TroopMoveSpeed:      getFloat("TROOP_MOVE_SPEED", 4),
 		TroopBaseAccuracy:   getFloat("TROOP_BASE_ACCURACY", 0.55),
 
-		PlayerMaxHP:       getInt("PLAYER_MAX_HP", 150),
+		PlayerMaxHP:       getInt("PLAYER_MAX_HP", 1000),
 		PlayerMaxAmmo:     getInt("PLAYER_MAX_AMMO", 24),
 		PlayerMoveSpeed:   getFloat("PLAYER_MOVE_SPEED", 6),
 		PlayerShootDamage: getInt("PLAYER_SHOOT_DAMAGE", 25),
