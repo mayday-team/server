@@ -19,6 +19,13 @@ type MovementInput struct {
 // stuck or malicious client cannot teleport the player.
 const MaxDeltaMs = 100
 
+const (
+	playerMinX = -12.5
+	playerMaxX = 12.5
+	playerMinZ = -45.0
+	playerMaxZ = -34.5
+)
+
 // ApplyPlayerMovement mutates the player position based on input booleans.
 // The dead player cannot move. Diagonal movement is normalized.
 func ApplyPlayerMovement(p *state.CivilianPlayerState, in MovementInput, deltaMs int64, speed float64) {
@@ -42,12 +49,12 @@ func ApplyPlayerMovement(p *state.CivilianPlayerState, in MovementInput, deltaMs
 		dir.Z -= math.Cos(p.Yaw)
 	}
 	if in.Right {
-		dir.X += math.Cos(p.Yaw)
-		dir.Z -= math.Sin(p.Yaw)
-	}
-	if in.Left {
 		dir.X -= math.Cos(p.Yaw)
 		dir.Z += math.Sin(p.Yaw)
+	}
+	if in.Left {
+		dir.X += math.Cos(p.Yaw)
+		dir.Z -= math.Sin(p.Yaw)
 	}
 	if gmath.IsZero(dir) {
 		p.Velocity = gmath.Vector3{}
@@ -57,6 +64,8 @@ func ApplyPlayerMovement(p *state.CivilianPlayerState, in MovementInput, deltaMs
 	dt := float64(deltaMs) / 1000.0
 	step := gmath.Scale(dir, speed*dt)
 	p.Position = gmath.Add(p.Position, step)
+	p.Position.X = math.Max(playerMinX, math.Min(playerMaxX, p.Position.X))
+	p.Position.Z = math.Max(playerMinZ, math.Min(playerMaxZ, p.Position.Z))
 	p.Velocity = gmath.Scale(dir, speed)
 }
 
