@@ -36,9 +36,10 @@ type MoveInput struct {
 }
 
 type PlayerInputPayload struct {
-	Seq     int64     `json:"seq"`
-	Move    MoveInput `json:"move"`
-	DeltaMs int64     `json:"delta_ms"`
+	Seq      int64          `json:"seq"`
+	Move     MoveInput      `json:"move"`
+	Position *gmath.Vector3 `json:"position,omitempty"`
+	DeltaMs  int64          `json:"delta_ms"`
 }
 
 type PlayerLookPayload struct {

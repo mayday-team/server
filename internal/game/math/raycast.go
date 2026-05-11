@@ -33,3 +33,31 @@ func CheckRayAgainstPoint(ray Ray, target Vector3, maxDistance, angleThreshold f
 	}
 	return RayHit{Distance: dist, Dot: cos}, true
 }
+
+// CheckRayAgainstSphere returns whether a ray intersects a sphere-like target.
+// It is useful for human-sized targets where a single center point is too
+// strict for a visible body mesh.
+func CheckRayAgainstSphere(ray Ray, center Vector3, radius, maxDistance float64) (RayHit, bool) {
+	dir := Normalize(ray.Direction)
+	if IsZero(dir) || radius <= 0 {
+		return RayHit{}, false
+	}
+
+	toCenter := Sub(center, ray.Origin)
+	along := Dot(toCenter, dir)
+	if along < 0 || along > maxDistance {
+		return RayHit{}, false
+	}
+
+	closest := Add(ray.Origin, Scale(dir, along))
+	missDist := Distance(closest, center)
+	if missDist > radius {
+		return RayHit{}, false
+	}
+
+	distToEntry := along - radius
+	if distToEntry < 0 {
+		distToEntry = along
+	}
+	return RayHit{Distance: distToEntry, Dot: 1}, true
+}

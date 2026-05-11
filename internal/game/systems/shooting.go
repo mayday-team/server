@@ -65,15 +65,28 @@ func ProcessPlayerShoot(
 		if t == nil || !t.IsAlive {
 			continue
 		}
-		target := t.Position
-		target.Y += 1.2
-		hit, ok := gmath.CheckRayAgainstPoint(ray, target, cfg.MaxDistance, cfg.AngleThreshold)
+		var (
+			bestHit gmath.RayHit
+			ok      bool
+		)
+		for _, y := range []float64{0.45, 1.15, 1.7} {
+			target := t.Position
+			target.Y += y
+			hit, hitOK := gmath.CheckRayAgainstSphere(ray, target, 0.7, cfg.MaxDistance)
+			if !hitOK {
+				continue
+			}
+			if !ok || hit.Distance < bestHit.Distance {
+				bestHit = hit
+				ok = true
+			}
+		}
 		if !ok {
 			continue
 		}
-		if hit.Distance < hitDist {
+		if bestHit.Distance < hitDist {
 			hitID = id
-			hitDist = hit.Distance
+			hitDist = bestHit.Distance
 		}
 	}
 

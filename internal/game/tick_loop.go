@@ -120,19 +120,23 @@ func (s *Session) handleInput(msg protocol.ClientMessage, now time.Time) {
 	s.player.LastSeenAt = now
 	switch {
 	case msg.PlayerInput != nil:
-		systems.ApplyPlayerMovement(s.player, systems.MovementInput{
-			Forward:  msg.PlayerInput.Move.Forward,
-			Backward: msg.PlayerInput.Move.Backward,
-			Left:     msg.PlayerInput.Move.Left,
-			Right:    msg.PlayerInput.Move.Right,
-		}, msg.PlayerInput.DeltaMs, s.cfg.PlayerMoveSpeed)
+		if msg.PlayerInput.Position != nil {
+			systems.ApplyClientPlayerPosition(s.player, *msg.PlayerInput.Position)
+		} else {
+			systems.ApplyPlayerMovement(s.player, systems.MovementInput{
+				Forward:  msg.PlayerInput.Move.Forward,
+				Backward: msg.PlayerInput.Move.Backward,
+				Left:     msg.PlayerInput.Move.Left,
+				Right:    msg.PlayerInput.Move.Right,
+			}, msg.PlayerInput.DeltaMs, s.cfg.PlayerMoveSpeed)
+		}
 		s.player.LastProcessedInputSeq = msg.PlayerInput.Seq
 	case msg.PlayerLook != nil:
 		systems.ApplyPlayerLook(s.player, msg.PlayerLook.Yaw, msg.PlayerLook.Pitch)
 	case msg.Shoot != nil:
 		s.handleShoot(*msg.Shoot, now)
 	case msg.Reload != nil:
-		if s.player.IsAlive && s.player.Ammo == 0 {
+		if s.player.IsAlive && s.player.Ammo < s.player.MaxAmmo {
 			s.player.Ammo = s.player.MaxAmmo
 		}
 	case msg.Interact != nil:

@@ -26,6 +26,22 @@ const (
 	playerMaxZ = -34.5
 )
 
+func clampPlayerPosition(pos gmath.Vector3) gmath.Vector3 {
+	pos.X = math.Max(playerMinX, math.Min(playerMaxX, pos.X))
+	pos.Z = math.Max(playerMinZ, math.Min(playerMaxZ, pos.Z))
+	pos.Y = 7.0
+	return pos
+}
+
+// ApplyClientPlayerPosition accepts the client-predicted camera position as
+// the session position so server systems follow the smooth local movement.
+func ApplyClientPlayerPosition(p *state.CivilianPlayerState, pos gmath.Vector3) {
+	if p == nil || !p.IsAlive {
+		return
+	}
+	p.Position = clampPlayerPosition(pos)
+}
+
 // ApplyPlayerMovement mutates the player position based on input booleans.
 // The dead player cannot move. Diagonal movement is normalized.
 func ApplyPlayerMovement(p *state.CivilianPlayerState, in MovementInput, deltaMs int64, speed float64) {
@@ -63,9 +79,7 @@ func ApplyPlayerMovement(p *state.CivilianPlayerState, in MovementInput, deltaMs
 	dir = gmath.Normalize(dir)
 	dt := float64(deltaMs) / 1000.0
 	step := gmath.Scale(dir, speed*dt)
-	p.Position = gmath.Add(p.Position, step)
-	p.Position.X = math.Max(playerMinX, math.Min(playerMaxX, p.Position.X))
-	p.Position.Z = math.Max(playerMinZ, math.Min(playerMaxZ, p.Position.Z))
+	p.Position = clampPlayerPosition(gmath.Add(p.Position, step))
 	p.Velocity = gmath.Scale(dir, speed)
 }
 

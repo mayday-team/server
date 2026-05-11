@@ -66,3 +66,13 @@ func TestRaycastZeroDirection(t *testing.T) {
 	_, ok := gmath.CheckRayAgainstPoint(ray, gmath.Vector3{Z: 5}, 60, 0.96)
 	assert.False(t, ok)
 }
+
+func TestRaycastSphereHitNearVisibleBody(t *testing.T) {
+	ray := gmath.Ray{
+		Origin:    gmath.Vector3{Y: 7, Z: -36},
+		Direction: gmath.Normalize(gmath.Vector3{Y: -5.6, Z: 44}),
+	}
+
+	_, ok := gmath.CheckRayAgainstSphere(ray, gmath.Vector3{Y: 1.15, Z: 8}, 0.75, 60)
+	assert.True(t, ok)
+}
