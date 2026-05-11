@@ -58,7 +58,7 @@ func Load() Config {
 		MaxTroopCount:       getInt("MAX_TROOP_COUNT", 30),
 		TroopDetectionRange: getFloat("TROOP_DETECTION_RANGE", 35),
 		TroopAttackRange:    getFloat("TROOP_ATTACK_RANGE", 22),
-		TroopDamage:         getInt("TROOP_DAMAGE", 8),
+		TroopDamage:         getInt("TROOP_DAMAGE", 4),
 		TroopMoveSpeed:      getFloat("TROOP_MOVE_SPEED", 4),
 		TroopBaseAccuracy:   getFloat("TROOP_BASE_ACCURACY", 0.55),
 
