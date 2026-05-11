@@ -387,6 +387,16 @@ func (s *Session) applyTroopShots(now time.Time) {
 		if !fired {
 			continue
 		}
+		origin := t.Position
+		origin.Y += 1.15
+		target := s.player.Position
+		s.sendType(protocol.ServerMsgTroopShot, protocol.TroopShotPayload{
+			SourceID: t.ID,
+			Origin:   origin,
+			Target:   target,
+			Hit:      res.AppliedDamage > 0,
+			Damage:   res.AppliedDamage,
+		})
 		if res.AppliedDamage == 0 {
 			continue
 		}

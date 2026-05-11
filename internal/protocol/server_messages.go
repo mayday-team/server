@@ -11,6 +11,7 @@ const (
 	ServerMsgSessionStarted       = "session_started"
 	ServerMsgStateSnapshot        = "state_snapshot"
 	ServerMsgTroopSpawned         = "troop_spawned"
+	ServerMsgTroopShot            = "troop_shot"
 	ServerMsgShotResult           = "shot_result"
 	ServerMsgDamageTaken          = "damage_taken"
 	ServerMsgPlayerDied           = "player_died"
@@ -81,6 +82,14 @@ type StateSnapshotPayload struct {
 type TroopSpawnedPayload struct {
 	Troop      TroopSnapshot `json:"troop"`
 	ServerTick int64         `json:"server_tick"`
+}
+
+type TroopShotPayload struct {
+	SourceID string        `json:"source_id"`
+	Origin   gmath.Vector3 `json:"origin"`
+	Target   gmath.Vector3 `json:"target"`
+	Hit      bool          `json:"hit"`
+	Damage   int           `json:"damage"`
 }
 
 type ShotReason string
