@@ -1,12 +1,11 @@
 services:
   postgres:
+    restart: unless-stopped
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: mayday
       POSTGRES_PASSWORD: mayday
       POSTGRES_DB: mayday
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -16,6 +15,7 @@ services:
       retries: 10
 
   mayday-server:
+    restart: unless-stopped
     build: .
     depends_on:
       postgres:
