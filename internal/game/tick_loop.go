@@ -357,6 +357,7 @@ func (s *Session) applyTroopShots(now time.Time) {
 	if !s.player.IsAlive {
 		return
 	}
+	fireRate := time.Duration(TroopFireRateMs) * time.Millisecond
 	for _, t := range s.troops {
 		if t == nil || !t.IsAlive {
 			continue
@@ -364,16 +365,25 @@ func (s *Session) applyTroopShots(now time.Time) {
 		if t.State != ai.StateAttack && t.State != ai.StateSuppress {
 			continue
 		}
-		if gmath.Distance(t.Position, s.player.Position) > s.cfg.TroopAttackRange {
+		dist := gmath.Distance(t.Position, s.player.Position)
+		if dist > s.cfg.TroopAttackRange {
 			continue
 		}
-		res, fired := systems.TroopShootAttempt(
-			t, s.player,
-			s.cfg.TroopDamage,
-			time.Duration(TroopFireRateMs)*time.Millisecond,
-			now,
-		)
+		// Distance-falloff accuracy: full base accuracy at point-blank,
+		// scaled down to 60% of base at max attack range.
+		hitChance := s.cfg.TroopBaseAccuracy
+		if s.cfg.TroopAttackRange > 0 {
+			hitChance *= 1 - (dist/s.cfg.TroopAttackRange)*0.4
+		}
+		damage := 0
+		if s.rng.Float64() < hitChance {
+			damage = s.cfg.TroopDamage
+		}
+		res, fired := systems.TroopShootAttempt(t, s.player, damage, fireRate, now)
 		if !fired {
+			continue
+		}
+		if res.AppliedDamage == 0 {
 			continue
 		}
 		s.stats.DamageTaken += res.AppliedDamage

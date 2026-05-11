@@ -21,20 +21,36 @@ type Client struct {
 	closeOnce sync.Once
 	closed    chan struct{}
 
+	readTimeout   time.Duration
+	pingInterval  time.Duration
 	writeDeadline time.Duration
 }
 
-func newClient(conn *websocket.Conn, log *slog.Logger, sendBuffer int) *Client {
+func newClient(conn *websocket.Conn, log *slog.Logger, sendBuffer int, readTimeout, writeTimeout time.Duration) *Client {
 	if sendBuffer <= 0 {
 		sendBuffer = 64
 	}
-	return &Client{
+	if readTimeout <= 0 {
+		readTimeout = 60 * time.Second
+	}
+	if writeTimeout <= 0 {
+		writeTimeout = 2 * time.Second
+	}
+	c := &Client{
 		conn:          conn,
 		sendCh:        make(chan protocol.ServerMessage, sendBuffer),
 		log:           log,
 		closed:        make(chan struct{}),
-		writeDeadline: 2 * time.Second,
+		readTimeout:   readTimeout,
+		writeDeadline: writeTimeout,
 	}
+	// Reset the read deadline on every pong so an idle but connected client
+	// is kept alive by the server-driven ping cycle in runWriter.
+	_ = conn.SetReadDeadline(time.Now().Add(readTimeout))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(readTimeout))
+	})
+	return c
 }
 
 // Send enqueues a message for the writer goroutine. It is non-blocking: if

@@ -6,6 +6,6 @@ const (
 	MinTroopFloor     = 2
 	StartingTroopAmmo = 30
 	StartingTroopHP   = 60
-	TroopFireRateMs   = 600
+	TroopFireRateMs   = 900
 	PlayerStartY      = 1.6
 )

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -20,6 +21,7 @@ type Config struct {
 	TroopAttackRange    float64
 	TroopDamage         int
 	TroopMoveSpeed      float64
+	TroopBaseAccuracy   float64
 
 	PlayerMaxHP       int
 	PlayerMaxAmmo     int
@@ -36,6 +38,12 @@ type Config struct {
 
 	SessionEventBufferSize int
 	ClientSendBufferSize   int
+
+	MaxSessions        int
+	ClientReadTimeout  time.Duration
+	ClientPingInterval time.Duration
+	ClientWriteTimeout time.Duration
+	AllowedOrigins     []string
 }
 
 func Load() Config {
@@ -52,8 +60,9 @@ func Load() Config {
 		TroopAttackRange:    getFloat("TROOP_ATTACK_RANGE", 22),
 		TroopDamage:         getInt("TROOP_DAMAGE", 8),
 		TroopMoveSpeed:      getFloat("TROOP_MOVE_SPEED", 4),
+		TroopBaseAccuracy:   getFloat("TROOP_BASE_ACCURACY", 0.55),
 
-		PlayerMaxHP:       getInt("PLAYER_MAX_HP", 100),
+		PlayerMaxHP:       getInt("PLAYER_MAX_HP", 150),
 		PlayerMaxAmmo:     getInt("PLAYER_MAX_AMMO", 24),
 		PlayerMoveSpeed:   getFloat("PLAYER_MOVE_SPEED", 6),
 		PlayerShootDamage: getInt("PLAYER_SHOOT_DAMAGE", 25),
@@ -68,6 +77,12 @@ func Load() Config {
 
 		SessionEventBufferSize: getInt("SESSION_EVENT_BUFFER_SIZE", 512),
 		ClientSendBufferSize:   getInt("CLIENT_SEND_BUFFER_SIZE", 64),
+
+		MaxSessions:        getInt("MAX_SESSIONS", 100),
+		ClientReadTimeout:  time.Duration(getInt("CLIENT_READ_TIMEOUT_MS", 60000)) * time.Millisecond,
+		ClientPingInterval: time.Duration(getInt("CLIENT_PING_INTERVAL_MS", 25000)) * time.Millisecond,
+		ClientWriteTimeout: time.Duration(getInt("CLIENT_WRITE_TIMEOUT_MS", 2000)) * time.Millisecond,
+		AllowedOrigins:     splitCSV(getString("ALLOWED_ORIGINS", "")),
 	}
 }
 
@@ -81,10 +96,33 @@ func (c Config) Validate() error {
 	if c.PlayerMaxHP <= 0 {
 		return fmt.Errorf("PLAYER_MAX_HP must be > 0")
 	}
+	if c.TroopBaseAccuracy < 0 || c.TroopBaseAccuracy > 1 {
+		return fmt.Errorf("TROOP_BASE_ACCURACY must be in [0, 1]")
+	}
 	if c.SessionEventBufferSize <= 0 || c.ClientSendBufferSize <= 0 {
 		return fmt.Errorf("buffer sizes must be > 0")
 	}
+	if c.MaxSessions <= 0 {
+		return fmt.Errorf("MAX_SESSIONS must be > 0")
+	}
+	if c.ClientPingInterval >= c.ClientReadTimeout {
+		return fmt.Errorf("CLIENT_PING_INTERVAL must be < CLIENT_READ_TIMEOUT")
+	}
 	return nil
+}
+
+func splitCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func getString(k, def string) string {

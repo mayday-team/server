@@ -9,12 +9,26 @@ import (
 
 // runWriter pumps outbound messages from the client send buffer onto the
 // wire. A write deadline keeps a slow consumer from stalling the session.
+// It also drives server-initiated ping frames; the reader's pong handler
+// extends the read deadline so an idle-but-healthy client stays connected.
 func (h *Handler) runWriter(c *Client) {
 	defer c.Close()
+	pingEvery := h.pingInterval
+	if pingEvery <= 0 {
+		pingEvery = 25 * time.Second
+	}
+	ping := time.NewTicker(pingEvery)
+	defer ping.Stop()
 	for {
 		select {
 		case <-c.closed:
 			return
+		case <-ping.C:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(c.writeDeadline))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				h.log.Debug("ws ping error", "err", err)
+				return
+			}
 		case msg, ok := <-c.sendCh:
 			if !ok {
 				return

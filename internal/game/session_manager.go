@@ -2,6 +2,7 @@ package game
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -11,6 +12,10 @@ import (
 	"github.com/mayday-team/server/internal/observability"
 	"github.com/mayday-team/server/internal/storage"
 )
+
+// ErrAtCapacity is returned by SessionManager.Create when the configured
+// MaxSessions limit has already been reached.
+var ErrAtCapacity = errors.New("session manager at capacity")
 
 // SessionManager owns active sessions and brokers WebSocket clients to
 // them. Mayday is a single-player game, so each connected client gets its
@@ -51,8 +56,9 @@ func NewSessionManager(
 
 // Create constructs and starts a new session for the supplied transport
 // client. The caller is responsible for routing inbound messages to the
-// session via session.EnqueueInput.
-func (m *SessionManager) Create(ctx context.Context, playerName string, sender Sender) *Session {
+// session via session.EnqueueInput. Returns ErrAtCapacity if MaxSessions
+// would be exceeded.
+func (m *SessionManager) Create(ctx context.Context, playerName string, sender Sender) (*Session, error) {
 	id := uuid.NewString()
 	s := NewSession(SessionParams{
 		ID:          id,
@@ -66,6 +72,10 @@ func (m *SessionManager) Create(ctx context.Context, playerName string, sender S
 	})
 
 	m.mu.Lock()
+	if m.cfg.MaxSessions > 0 && len(m.sessions) >= m.cfg.MaxSessions {
+		m.mu.Unlock()
+		return nil, ErrAtCapacity
+	}
 	m.sessions[id] = s
 	m.mu.Unlock()
 
@@ -86,7 +96,7 @@ func (m *SessionManager) Create(ctx context.Context, playerName string, sender S
 		}
 	}()
 
-	return s
+	return s, nil
 }
 
 // ActiveCount returns the number of currently running sessions.
