@@ -258,12 +258,12 @@ func (s *Session) spawnTroopBatch(n int) {
 }
 
 func (s *Session) spawnTroopAroundPlayer() {
-	angle := s.rng.Float64() * 2 * math.Pi
-	radius := s.cfg.TroopDetectionRange*0.8 + s.rng.Float64()*5
+	x := s.player.Position.X - 16 + s.rng.Float64()*32
+	z := 4 + s.rng.Float64()*22
 	pos := gmath.Vector3{
-		X: s.player.Position.X + radius*math.Cos(angle),
+		X: x,
 		Y: 0,
-		Z: s.player.Position.Z + radius*math.Sin(angle),
+		Z: z,
 	}
 	t := &state.MartialTroopState{
 		ID:         uuid.NewString(),

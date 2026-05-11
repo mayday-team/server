@@ -34,16 +34,20 @@ func ApplyPlayerMovement(p *state.CivilianPlayerState, in MovementInput, deltaMs
 
 	dir := gmath.Vector3{}
 	if in.Forward {
-		dir.Z += 1
+		dir.X += math.Sin(p.Yaw)
+		dir.Z += math.Cos(p.Yaw)
 	}
 	if in.Backward {
-		dir.Z -= 1
+		dir.X -= math.Sin(p.Yaw)
+		dir.Z -= math.Cos(p.Yaw)
 	}
 	if in.Right {
-		dir.X += 1
+		dir.X += math.Cos(p.Yaw)
+		dir.Z -= math.Sin(p.Yaw)
 	}
 	if in.Left {
-		dir.X -= 1
+		dir.X -= math.Cos(p.Yaw)
+		dir.Z += math.Sin(p.Yaw)
 	}
 	if gmath.IsZero(dir) {
 		p.Velocity = gmath.Vector3{}

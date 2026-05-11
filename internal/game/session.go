@@ -97,7 +97,7 @@ func NewSession(p SessionParams) *Session {
 	player := &state.CivilianPlayerState{
 		ID:       uuid.NewString(),
 		Name:     p.PlayerName,
-		Position: gmath.Vector3{X: 0, Y: PlayerStartY, Z: 0},
+		Position: gmath.Vector3{X: 0, Y: PlayerStartY, Z: PlayerStartZ},
 		HP:       cfg.PlayerMaxHP,
 		MaxHP:    cfg.PlayerMaxHP,
 		Ammo:     cfg.PlayerMaxAmmo,

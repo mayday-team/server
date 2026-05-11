@@ -65,7 +65,9 @@ func ProcessPlayerShoot(
 		if t == nil || !t.IsAlive {
 			continue
 		}
-		hit, ok := gmath.CheckRayAgainstPoint(ray, t.Position, cfg.MaxDistance, cfg.AngleThreshold)
+		target := t.Position
+		target.Y += 1.2
+		hit, ok := gmath.CheckRayAgainstPoint(ray, target, cfg.MaxDistance, cfg.AngleThreshold)
 		if !ok {
 			continue
 		}

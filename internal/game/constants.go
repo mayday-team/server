@@ -7,5 +7,6 @@ const (
 	StartingTroopAmmo = 30
 	StartingTroopHP   = 60
 	TroopFireRateMs   = 900
-	PlayerStartY      = 1.6
+	PlayerStartY      = 7.0
+	PlayerStartZ      = -36.0
 )
