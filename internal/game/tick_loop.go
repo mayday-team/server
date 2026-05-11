@@ -264,7 +264,7 @@ func (s *Session) maybeSpawnTroops(upd scenario.Update, _ time.Time) {
 	case scenario.PhaseEncirclement:
 		s.spawnTroopBatch(8)
 	case scenario.PhaseFinalStand:
-		s.spawnTroopBatch(18)
+		s.spawnTroopBatch(24)
 	}
 }
 
@@ -385,10 +385,10 @@ func (s *Session) applyTroopShots(now time.Time) {
 	accuracyMultiplier := 1.0
 	attackRangeBonus := 0.0
 	if displayPhaseFor(s.director.CurrentPhase()) == 3 {
-		fireRate = 320 * time.Millisecond
-		damageMultiplier = 4
-		accuracyMultiplier = 1.55
-		attackRangeBonus = 10
+		fireRate = 220 * time.Millisecond
+		damageMultiplier = 8
+		accuracyMultiplier = 1.9
+		attackRangeBonus = 20
 	}
 	for _, t := range s.troops {
 		if t == nil || !t.IsAlive {
