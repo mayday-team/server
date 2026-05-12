@@ -65,7 +65,7 @@ func Load() Config {
 		PlayerMaxHP:       getInt("PLAYER_MAX_HP", 1000),
 		PlayerMaxAmmo:     getInt("PLAYER_MAX_AMMO", 24),
 		PlayerMoveSpeed:   getFloat("PLAYER_MOVE_SPEED", 8),
-		PlayerShootDamage: getInt("PLAYER_SHOOT_DAMAGE", 25),
+		PlayerShootDamage: getInt("PLAYER_SHOOT_DAMAGE", 60),
 
 		ShootMaxDistance:    getFloat("SHOOT_MAX_DISTANCE", 60),
 		ShootAngleThreshold: getFloat("SHOOT_ANGLE_THRESHOLD", 0.96),
